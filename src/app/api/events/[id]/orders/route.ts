@@ -47,7 +47,7 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { userName, items, orderId } = body;
+    const { userName, items, orderId, includeTax } = body;
 
     if (!userName || !userName.trim()) {
       return NextResponse.json({ success: false, message: 'Nama pemesan wajib diisi' }, { status: 400 });
@@ -71,7 +71,12 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Pilih minimal satu menu dengan jumlah valid' }, { status: 400 });
     }
 
-    const calc = calculateOrder(validItems, event.taxConfig);
+    const effectiveTaxConfig = {
+      ...event.taxConfig,
+      useTax: event.taxConfig.useTax && includeTax === true,
+    };
+
+    const calc = calculateOrder(validItems, effectiveTaxConfig);
 
     const userOrder: UserOrder = {
       id: orderId || `ord_${nanoid(8)}`,

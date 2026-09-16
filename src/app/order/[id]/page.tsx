@@ -27,7 +27,7 @@ import {
   Calculator,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { EventData, MenuItem, OrderItem, UserOrder } from '@/types';
+import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
 import { formatRupiah, calculateOrder } from '@/lib/calculator';
 
 export default function OrderPage() {
@@ -122,6 +122,7 @@ export default function OrderPage() {
 
     if (found) {
       setExistingOrder(found);
+      setShowTaxEstimate(found.taxAmount > 0);
       // Pre-fill selected items from existing order
       const map: Record<string, { quantity: number; notes: string }> = {};
       found.items.forEach((it) => {
@@ -140,6 +141,7 @@ export default function OrderPage() {
   const handleSelectUserToEdit = (user: UserOrder) => {
     setUserName(user.userName);
     setExistingOrder(user);
+    setShowTaxEstimate(user.taxAmount > 0);
     const map: Record<string, { quantity: number; notes: string }> = {};
     user.items.forEach((it) => {
       map[it.menuItemId] = {
@@ -230,6 +232,7 @@ export default function OrderPage() {
   }, [selectedItems, event]);
 
   // Total calculations
+  // Jika event memiliki PPN, PPN hanya dihitung ke total jika showTaxEstimate aktif
   const calculation = useMemo(() => {
     if (!event) {
       return {
@@ -241,8 +244,12 @@ export default function OrderPage() {
         totalAmount: 0,
       };
     }
-    return calculateOrder(orderItemsList, event.taxConfig);
-  }, [orderItemsList, event]);
+    const effectiveTaxConfig: TaxConfig = {
+      ...event.taxConfig,
+      useTax: event.taxConfig.useTax && showTaxEstimate,
+    };
+    return calculateOrder(orderItemsList, effectiveTaxConfig);
+  }, [orderItemsList, event, showTaxEstimate]);
 
   const totalItemCount = useMemo(() => {
     return orderItemsList.reduce((sum, it) => sum + it.quantity, 0);
@@ -273,6 +280,7 @@ export default function OrderPage() {
           userName: userName.trim(),
           items: orderItemsList,
           orderId: existingOrder?.id,
+          includeTax: showTaxEstimate,
         }),
       });
 
@@ -566,10 +574,10 @@ export default function OrderPage() {
       {/* Tax Estimate Toggle & Categories Header */}
       <div className="space-y-2.5 mb-4">
         {event.taxConfig.useTax && (
-          <div className="flex items-center justify-between bg-orange-50/60 border border-orange-200/80 rounded-xl px-3.5 py-2">
+          <div className="flex items-center justify-between bg-orange-50/70 border border-orange-200 rounded-xl px-3.5 py-2.5 shadow-2xs">
             <label
               htmlFor="tax-toggle"
-              className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-800"
+              className="flex items-center gap-2.5 cursor-pointer select-none text-xs text-slate-800"
             >
               <input
                 id="tax-toggle"
@@ -578,12 +586,25 @@ export default function OrderPage() {
                 onChange={(e) => setShowTaxEstimate(e.target.checked)}
                 className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300 cursor-pointer accent-orange-600"
               />
-              <span className="font-semibold">
-                Tampilkan estimasi harga sudah termasuk PPN ({event.taxConfig.taxPercent}%)
-              </span>
+              <div>
+                <span className="font-bold text-slate-900 block">
+                  Hitung tagihan termasuk PPN ({event.taxConfig.taxPercent}%)
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  {showTaxEstimate
+                    ? 'PPN aktif: harga menu & total tagihan sudah ditambahkan PPN'
+                    : 'PPN non-aktif: total tagihan dihitung murni harga asli menu'}
+                </span>
+              </div>
             </label>
-            <span className="text-[10px] text-orange-700 bg-orange-100/80 px-2 py-0.5 rounded-md font-bold hidden sm:inline-block">
-              Simulasi Harga
+            <span
+              className={`text-[11px] px-2.5 py-1 rounded-lg font-bold shrink-0 transition ${
+                showTaxEstimate
+                  ? 'bg-orange-600 text-white shadow-2xs'
+                  : 'bg-slate-200/80 text-slate-600'
+              }`}
+            >
+              {showTaxEstimate ? '+ PPN Aktif' : 'Tanpa PPN'}
             </span>
           </div>
         )}
