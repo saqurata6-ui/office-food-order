@@ -21,6 +21,9 @@ import {
   Share2,
   Check,
   Store,
+  Edit3,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder } from '@/types';
@@ -130,6 +133,27 @@ export default function OrderPage() {
       setExistingOrder(null);
     }
   }, [userName, orders]);
+
+  // Handler to quickly select a user to edit their order
+  const handleSelectUserToEdit = (user: UserOrder) => {
+    setUserName(user.userName);
+    setExistingOrder(user);
+    const map: Record<string, { quantity: number; notes: string }> = {};
+    user.items.forEach((it) => {
+      map[it.menuItemId] = {
+        quantity: it.quantity,
+        notes: it.notes || '',
+      };
+    });
+    setSelectedItems(map);
+  };
+
+  // Reset to empty / new order
+  const handleResetToNewOrder = () => {
+    setUserName('');
+    setExistingOrder(null);
+    setSelectedItems({});
+  };
 
   // Categories list
   const categories = useMemo(() => {
@@ -433,40 +457,105 @@ export default function OrderPage() {
       )}
 
       {/* User Name Input Section */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-3 mb-5">
-        <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-          Nama Lengkap / Panggilan Kamu *
-        </label>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-3.5 mb-5">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+            Nama Pemesan *
+          </label>
+          {existingOrder && !event.isLocked && (
+            <button
+              type="button"
+              onClick={handleResetToNewOrder}
+              className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1 bg-orange-50 hover:bg-orange-100 px-2 py-1 rounded-lg transition"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Pesan sebagai nama baru
+            </button>
+          )}
+        </div>
+
         <div className="relative">
           <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Masukkan namamu (misal: Budi Santoso / Sarah IT)"
+            placeholder="Ketik namamu (misal: Budi Santoso / Sarah IT)"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
             disabled={event.isLocked}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-500"
+            className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-slate-100 disabled:text-slate-500 transition ${
+              existingOrder
+                ? 'border-blue-300 bg-blue-50/40 text-blue-950 font-bold'
+                : 'border-slate-300 bg-white text-slate-900'
+            }`}
           />
         </div>
 
-        {existingOrder ? (
-          <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center justify-between">
-            <div>
-              <span className="font-bold">Pesanan sebelumnya ditemukan!</span>
-              <p className="text-[11px] text-blue-600">
-                {event.isLocked
-                  ? 'Berikut adalah rincian pesanan yang telah Anda simpan.'
-                  : 'Anda dapat menyesuaikan menu di bawah dan klik "Simpan Perubahan".'}
-              </p>
+        {/* Quick select previous order pills */}
+        {orders.length > 0 && !event.isLocked && (
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-[11px] font-bold text-slate-700">
+                Sudah pernah pesan? Klik namamu untuk ubah menu:
+              </span>
             </div>
-            <span className="font-bold text-blue-900 bg-blue-100 px-2 py-1 rounded">
-              {formatRupiah(existingOrder.totalAmount)}
-            </span>
+            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+              {orders.map((ord) => {
+                const isCurrentActive =
+                  ord.userName.trim().toLowerCase() === userName.trim().toLowerCase();
+                return (
+                  <button
+                    key={ord.id}
+                    type="button"
+                    onClick={() => handleSelectUserToEdit(ord)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 border ${
+                      isCurrentActive
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                        : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
+                    }`}
+                  >
+                    <span>{ord.userName}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                        isCurrentActive
+                          ? 'bg-blue-700 text-blue-100'
+                          : 'bg-slate-200/80 text-slate-600'
+                      }`}
+                    >
+                      {formatRupiah(ord.totalAmount)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Status banner when editing vs new order */}
+        {existingOrder ? (
+          <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                <Edit3 className="w-4 h-4 text-blue-600" />
+                <span>Mode Edit Pesanan: {existingOrder.userName}</span>
+              </div>
+              <span className="text-[11px] font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-md">
+                Tersimpan: {formatRupiah(existingOrder.totalAmount)}
+              </span>
+            </div>
+            <p className="text-[11px] text-blue-700 leading-relaxed">
+              {event.isLocked
+                ? 'Pesanan sudah dikunci oleh PIC. Anda hanya dapat melihat rincian pesanan Anda.'
+                : 'Porsi dan catatan sebelumnya sudah otomatis terisi di bawah. Silakan tambah/kurang menu, lalu tekan tombol "Simpan Perubahan Pesanan" di bawah.'}
+            </p>
           </div>
         ) : (
           userName.trim() && (
-            <p className="text-[11px] text-slate-500">
-              Halo <strong>{userName}</strong>, silakan pilih menu makanan & minumanmu di bawah ini:
+            <p className="text-[11px] text-slate-500 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+              <span>
+                Pesanan baru untuk <strong>{userName}</strong>. Silakan tentukan menu di bawah:
+              </span>
             </p>
           )
         )}
@@ -663,10 +752,15 @@ export default function OrderPage() {
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Menyimpan...</span>
                   </>
+                ) : existingOrder ? (
+                  <>
+                    <Edit3 className="w-4 h-4" />
+                    <span>Simpan Perubahan Pesanan</span>
+                  </>
                 ) : (
                   <>
                     <ShoppingBag className="w-4 h-4" />
-                    <span>{existingOrder ? 'Simpan Perubahan' : 'Kirim Pesanan'}</span>
+                    <span>Kirim Pesanan</span>
                   </>
                 )}
               </button>
