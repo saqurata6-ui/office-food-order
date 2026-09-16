@@ -226,6 +226,16 @@ export default function OrderPage() {
     return calculateOrder(orderItemsList, effectiveTaxConfig);
   }, [orderItemsList, event, showTaxEstimate]);
 
+  // Kalkulasi untuk preview pesanan yang mengikuti centangan showTaxEstimate
+  const previewCalculation = useMemo(() => {
+    if (!previewOrder || !event) return null;
+    const effectiveTaxConfig: TaxConfig = {
+      ...event.taxConfig,
+      useTax: event.taxConfig.useTax && showTaxEstimate,
+    };
+    return calculateOrder(previewOrder.items, effectiveTaxConfig);
+  }, [previewOrder, event, showTaxEstimate]);
+
   const totalItemCount = useMemo(() => {
     return orderItemsList.reduce((sum, it) => sum + it.quantity, 0);
   }, [orderItemsList]);
@@ -364,12 +374,6 @@ export default function OrderPage() {
             className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition shadow-xs"
           >
             Ke Halaman Utama
-          </Link>
-          <Link
-            href="/create"
-            className="px-4 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-bold transition"
-          >
-            + Buat Acara Baru
           </Link>
         </div>
       </div>
@@ -511,6 +515,14 @@ export default function OrderPage() {
                 const isCurrentActive =
                   existingOrder?.id === ord.id ||
                   ord.userName.trim().toLowerCase() === userName.trim().toLowerCase();
+                
+                // Hitung total untuk chip sesuai status centangan PPN
+                const chipTaxConfig: TaxConfig = {
+                  ...event.taxConfig,
+                  useTax: event.taxConfig.useTax && showTaxEstimate,
+                };
+                const ordCalc = calculateOrder(ord.items, chipTaxConfig);
+
                 return (
                   <button
                     key={ord.id}
@@ -530,7 +542,7 @@ export default function OrderPage() {
                           : 'bg-slate-200/80 text-slate-600'
                       }`}
                     >
-                      {formatRupiah(ord.totalAmount)}
+                      {formatRupiah(ordCalc.totalAmount)}
                     </span>
                   </button>
                 );
@@ -548,7 +560,12 @@ export default function OrderPage() {
                 <span>Mode Edit Pesanan: {existingOrder.userName}</span>
               </div>
               <span className="text-[11px] font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-md">
-                Tersimpan: {formatRupiah(existingOrder.totalAmount)}
+                Tersimpan: {formatRupiah(
+                  calculateOrder(existingOrder.items, {
+                    ...event.taxConfig,
+                    useTax: event.taxConfig.useTax && showTaxEstimate,
+                  }).totalAmount
+                )}
               </span>
             </div>
             <p className="text-[11px] text-blue-700 leading-relaxed">
@@ -910,29 +927,78 @@ export default function OrderPage() {
                 ))}
               </div>
 
+              {/* Toggle Estimasi PPN di dalam Modal Preview */}
+              {event.taxConfig.useTax && (
+                <label className="flex items-center justify-between p-2.5 rounded-xl bg-orange-50/70 border border-orange-200 cursor-pointer select-none text-xs">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={showTaxEstimate}
+                      onChange={(e) => setShowTaxEstimate(e.target.checked)}
+                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300 cursor-pointer accent-orange-600"
+                    />
+                    <div>
+                      <span className="font-bold text-slate-900 block">
+                        Hitung tagihan termasuk PPN ({event.taxConfig.taxPercent}%)
+                      </span>
+                      <span className="text-[10px] text-slate-500 block">
+                        {showTaxEstimate
+                          ? 'PPN aktif: total tagihan ditambahkan PPN'
+                          : 'PPN non-aktif: total tagihan murni harga menu'}
+                      </span>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded font-bold shrink-0 transition ${
+                      showTaxEstimate
+                        ? 'bg-orange-600 text-white shadow-2xs'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {showTaxEstimate ? '+ PPN Aktif' : 'Tanpa PPN'}
+                  </span>
+                </label>
+              )}
+
               {/* Rincian Finansial */}
               <div className="p-3.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-600 border border-slate-100">
                 <div className="flex justify-between">
                   <span>Subtotal Menu:</span>
                   <span className="font-medium text-slate-800">
-                    {formatRupiah(previewOrder.subtotal)}
+                    {formatRupiah(previewCalculation?.subtotal ?? previewOrder.subtotal)}
                   </span>
                 </div>
-                {previewOrder.taxAmount > 0 && (
+                {showTaxEstimate && event.taxConfig.useTax && (previewCalculation?.taxAmount ?? 0) > 0 && (
                   <div className="flex justify-between text-slate-600">
                     <span>PPN ({event.taxConfig.taxPercent}%):</span>
-                    <span className="font-medium text-slate-800">+{formatRupiah(previewOrder.taxAmount)}</span>
+                    <span className="font-medium text-slate-800">
+                      +{formatRupiah(previewCalculation!.taxAmount)}
+                    </span>
                   </div>
                 )}
-                {previewOrder.serviceAmount > 0 && (
+                {(previewCalculation?.serviceAmount ?? 0) > 0 && (
                   <div className="flex justify-between text-slate-600">
                     <span>Service Charge:</span>
-                    <span className="font-medium text-slate-800">+{formatRupiah(previewOrder.serviceAmount)}</span>
+                    <span className="font-medium text-slate-800">
+                      +{formatRupiah(previewCalculation!.serviceAmount)}
+                    </span>
+                  </div>
+                )}
+                {previewCalculation?.roundingAmount !== 0 && previewCalculation?.roundingAmount !== undefined && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>Pembulatan:</span>
+                    <span className="font-medium text-slate-800">
+                      {previewCalculation.roundingAmount > 0
+                        ? `+${formatRupiah(previewCalculation.roundingAmount)}`
+                        : formatRupiah(previewCalculation.roundingAmount)}
+                    </span>
                   </div>
                 )}
                 <div className="pt-2 border-t border-slate-200 flex justify-between font-extrabold text-sm text-slate-900">
                   <span>Total Tagihan:</span>
-                  <span className="text-orange-600 text-base">{formatRupiah(previewOrder.totalAmount)}</span>
+                  <span className="text-orange-600 text-base">
+                    {formatRupiah(previewCalculation?.totalAmount ?? previewOrder.totalAmount)}
+                  </span>
                 </div>
               </div>
 

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -16,6 +16,8 @@ import {
   MapPin,
   User,
   CheckCircle2,
+  Store,
+  X,
 } from 'lucide-react';
 
 interface LocalHistoryItem {
@@ -27,12 +29,47 @@ interface LocalHistoryItem {
   role: 'pic' | 'participant';
 }
 
+interface EventSummary {
+  id: string;
+  title: string;
+  picName: string;
+  date: string;
+  time: string;
+  restaurantName: string;
+  isLocked: boolean;
+  createdAt: string;
+}
+
 export default function HomePage() {
   const router = useRouter();
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(true);
   const [history, setHistory] = useState<LocalHistoryItem[]>([]);
   const [joinCode, setJoinCode] = useState('');
 
+  // PIN modal state
+  const [pinModalEvent, setPinModalEvent] = useState<EventSummary | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [verifyingPin, setVerifyingPin] = useState(false);
+
+  const fetchEvents = async () => {
+    try {
+      setLoadingEvents(true);
+      const res = await fetch('/api/events');
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setEvents(json.data);
+      }
+    } catch (e) {
+      console.error('Error fetching events:', e);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
   useEffect(() => {
+    fetchEvents();
     try {
       const stored = localStorage.getItem('makan_kantor_history');
       if (stored) {
@@ -48,6 +85,60 @@ export default function HomePage() {
     const clean = joinCode.trim();
     if (clean) {
       router.push(`/order/${clean}`);
+    }
+  };
+
+  const handleOpenPicModal = (ev: EventSummary) => {
+    setPinModalEvent(ev);
+    // Cek apakah di browser ini sudah pernah tersimpan PIN untuk acara ini
+    const saved = history.find((h) => h.id === ev.id && h.adminPin);
+    if (saved && saved.adminPin) {
+      setPinInput(saved.adminPin);
+    } else {
+      setPinInput('');
+    }
+    setPinError('');
+  };
+
+  const handleVerifyAndOpenPic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pinModalEvent || !pinInput.trim()) return;
+
+    setVerifyingPin(true);
+    setPinError('');
+
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(pinModalEvent.id)}?pin=${encodeURIComponent(pinInput.trim())}`
+      );
+      const json = await res.json();
+
+      if (json.success && json.isAdmin) {
+        // Simpan ke local history sebagai PIC
+        try {
+          const stored = localStorage.getItem('makan_kantor_history');
+          const list = stored ? JSON.parse(stored) : [];
+          const filtered = list.filter((item: any) => item.id !== pinModalEvent.id);
+          filtered.unshift({
+            id: pinModalEvent.id,
+            title: pinModalEvent.title,
+            restaurantName: pinModalEvent.restaurantName,
+            date: pinModalEvent.date,
+            adminPin: pinInput.trim(),
+            role: 'pic',
+          });
+          localStorage.setItem('makan_kantor_history', JSON.stringify(filtered.slice(0, 15)));
+        } catch (e) {}
+
+        router.push(`/event/${pinModalEvent.id}/admin?pin=${encodeURIComponent(pinInput.trim())}`);
+      } else {
+        setPinError('PIN PIC salah. Silakan periksa kembali.');
+      }
+    } catch (err) {
+      console.error(err);
+      setPinError('Terjadi kesalahan koneksi.');
+    } finally {
+      setVerifyingPin(false);
     }
   };
 
@@ -95,60 +186,179 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* History Section (if any) */}
-      {history.length > 0 && (
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
+      {/* Daftar Acara Aktif dari Server */}
+      <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <span>🕒</span> Acara Terakhir Anda
+              <span>📋</span> Daftar Acara Makan Kantor
             </h2>
-            <span className="text-xs text-slate-500">Tersimpan di browser ini</span>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Dapat dibuka di perangkat mana pun. Pilih acara untuk memesan menu atau kelola sebagai PIC.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={fetchEvents}
+            className="text-xs text-orange-600 hover:text-orange-700 font-semibold"
+          >
+            Muat Ulang
+          </button>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {history.map((item) => (
+        {loadingEvents ? (
+          <div className="p-8 text-center text-xs text-slate-400">
+            <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            Memuat daftar acara...
+          </div>
+        ) : events.length === 0 ? (
+          <div className="p-8 text-center space-y-3 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto font-bold">
+              <UtensilsCrossed className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-800">Belum Ada Acara Makan</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              Belum ada acara makan yang dibuat. Silakan buat acara makan baru untuk mulai mengumpulkan pesanan teman kantor!
+            </p>
+            <Link
+              href="/create"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs"
+            >
+              <PlusCircle className="w-4 h-4" /> + Buat Acara Pertama
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {events.map((item) => (
               <div
                 key={item.id}
                 className="p-4 rounded-xl border border-slate-200 hover:border-orange-300 hover:shadow-md transition bg-slate-50 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between text-xs font-semibold mb-1">
-                    <span className="text-orange-600 truncate">{item.restaurantName}</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full ${
-                        item.role === 'pic' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                      }`}
-                    >
-                      {item.role === 'pic' ? 'PIC' : 'Peserta'}
+                  <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+                    <span className="text-orange-600 truncate font-bold flex items-center gap-1">
+                      <Store className="w-3.5 h-3.5 shrink-0" />
+                      {item.restaurantName}
                     </span>
+                    {item.isLocked ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-200">
+                        Dikunci
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                        Buka
+                      </span>
+                    )}
                   </div>
-                  <h3 className="font-bold text-slate-800 line-clamp-1">{item.title}</h3>
-                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" /> {item.date}
-                  </p>
+                  <h3 className="font-extrabold text-slate-900 text-sm line-clamp-1">{item.title}</h3>
+                  <div className="mt-2 space-y-1 text-xs text-slate-500">
+                    <div className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span>PIC: <strong>{item.picName}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{item.date} • {item.time} WIB</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
-                  {item.role === 'pic' && item.adminPin ? (
-                    <Link
-                      href={`/event/${item.id}/admin?pin=${item.adminPin}`}
-                      className="text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1"
-                    >
-                      Buka Dashboard PIC <ArrowRight className="w-3 h-3" />
-                    </Link>
-                  ) : (
-                    <Link
-                      href={`/order/${item.id}`}
-                      className="text-slate-700 hover:text-orange-600 font-semibold flex items-center gap-1"
-                    >
-                      Buka Form Menu <ArrowRight className="w-3 h-3" />
-                    </Link>
-                  )}
+                <div className="mt-4 pt-3 border-t border-slate-200/70 flex items-center gap-2">
+                  <Link
+                    href={`/order/${item.id}`}
+                    className="flex-1 py-2 px-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs text-center transition shadow-2xs flex items-center justify-center gap-1"
+                  >
+                    Buka Form Menu
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPicModal(item)}
+                    className="py-2 px-3 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-800 font-bold text-xs transition flex items-center gap-1.5 shrink-0"
+                    title="Buka sebagai PIC (perlu PIN)"
+                  >
+                    <Lock className="w-3 h-3 text-slate-700" />
+                    <span>Buka PIC</span>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
-        </section>
+        )}
+      </section>
+
+      {/* Modal Masukkan PIN PIC */}
+      {pinModalEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95 duration-150">
+            <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Verifikasi PIC Admin
+                  </span>
+                  <h3 className="font-extrabold text-slate-900 text-sm leading-tight truncate max-w-[200px]">
+                    {pinModalEvent.title}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPinModalEvent(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleVerifyAndOpenPic} className="p-5 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Masukkan 4-digit PIN Admin PIC yang dibuat saat mendaftarkan acara <strong>{pinModalEvent.title}</strong>:
+              </p>
+
+              {pinError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-medium text-center">
+                  {pinError}
+                </div>
+              )}
+
+              <div>
+                <input
+                  type="password"
+                  maxLength={6}
+                  autoFocus
+                  placeholder="PIN PIC (4 digit)"
+                  value={pinInput}
+                  onChange={(e) => {
+                    setPinInput(e.target.value);
+                    setPinError('');
+                  }}
+                  className="w-full text-center text-2xl tracking-widest font-mono py-2.5 rounded-xl border border-slate-300 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPinModalEvent(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={!pinInput.trim() || verifyingPin}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shadow-orange-600/20"
+                >
+                  {verifyingPin ? 'Memeriksa...' : 'Buka Dashboard'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Feature Highlights Grid */}
