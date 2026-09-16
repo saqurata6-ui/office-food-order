@@ -1,0 +1,93 @@
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const event = db.getEvent(id);
+
+    if (!event) {
+      return NextResponse.json(
+        { success: false, message: 'Acara tidak ditemukan' },
+        { status: 404 }
+      );
+    }
+
+    const orders = db.getOrders(id);
+
+    const url = new URL(req.url);
+    const pin = url.searchParams.get('pin');
+    const isAdmin = pin === event.adminPin;
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...event,
+        adminPin: isAdmin ? event.adminPin : undefined,
+      },
+      orders,
+      isAdmin,
+    });
+  } catch (error) {
+    console.error('Error fetching event details:', error);
+    return NextResponse.json(
+      { success: false, message: 'Gagal mengambil data acara' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const event = db.getEvent(id);
+
+    if (!event) {
+      return NextResponse.json(
+        { success: false, message: 'Acara tidak ditemukan' },
+        { status: 404 }
+      );
+    }
+
+    const body = await req.json();
+    const { isLocked, menuItems, taxConfig, adminPin } = body;
+
+    if (adminPin && adminPin !== event.adminPin) {
+      return NextResponse.json(
+        { success: false, message: 'PIN PIC tidak sesuai' },
+        { status: 403 }
+      );
+    }
+
+    if (typeof isLocked === 'boolean') {
+      db.updateEventLock(id, isLocked);
+    }
+
+    const updatedEvent = db.getEvent(id)!;
+    if (menuItems && Array.isArray(menuItems)) {
+      updatedEvent.menuItems = menuItems;
+    }
+    if (taxConfig) {
+      updatedEvent.taxConfig = taxConfig;
+    }
+    db.saveEvent(updatedEvent);
+
+    return NextResponse.json({
+      success: true,
+      data: updatedEvent,
+      message: 'Acara berhasil diperbarui',
+    });
+  } catch (error) {
+    console.error('Error updating event:', error);
+    return NextResponse.json(
+      { success: false, message: 'Gagal memperbarui acara' },
+      { status: 500 }
+    );
+  }
+}

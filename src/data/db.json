@@ -1,0 +1,247 @@
+{
+  "events": {
+    "makan-siang-tim-it": {
+      "id": "makan-siang-tim-it",
+      "adminPin": "1234",
+      "title": "Makan Siang Bareng Tim IT & Product",
+      "picName": "Budi Santoso",
+      "date": "2026-09-18",
+      "time": "12:00",
+      "restaurantName": "Warung Bu Kris",
+      "restaurantAddress": "Jl. Senopati No. 45, Jakarta Selatan",
+      "taxConfig": {
+        "useTax": true,
+        "taxPercent": 10,
+        "useServiceCharge": false,
+        "serviceChargePercent": 0,
+        "rounding": "1000"
+      },
+      "menuItems": [
+        {
+          "id": "menu_1",
+          "name": "Nasi Ayam Bakar Madu Spesial",
+          "price": 28000,
+          "category": "Makanan",
+          "description": "Ayam bakar bumbu madu, lalapan, sambal terasi"
+        },
+        {
+          "id": "menu_2",
+          "name": "Nasi Bebek Goreng Sambal Korek",
+          "price": 34000,
+          "category": "Makanan",
+          "description": "Bebek gurih crispy dengan sambal korek"
+        },
+        {
+          "id": "menu_3",
+          "name": "Nasi Rawon Daging Sapi",
+          "price": 32000,
+          "category": "Makanan",
+          "description": "Kuah kluwek hitam dengan potongan daging empuk"
+        },
+        {
+          "id": "menu_4",
+          "name": "Es Teh Manis Jumbo",
+          "price": 6000,
+          "category": "Minuman",
+          "description": "Gula asli segar melati"
+        },
+        {
+          "id": "menu_5",
+          "name": "Es Jeruk Peras Murni",
+          "price": 9000,
+          "category": "Minuman",
+          "description": "Jeruk peras segar"
+        },
+        {
+          "id": "menu_6",
+          "name": "Tahu Tempe Goreng (Isi 4)",
+          "price": 12000,
+          "category": "Cemilan",
+          "description": "Tahu tempe gurih dengan sambal kecap"
+        }
+      ],
+      "isLocked": false,
+      "createdAt": "2026-09-16T08:00:00.000Z",
+      "updatedAt": "2026-09-16T07:39:23.809Z"
+    },
+    "uji-coba-nota-ssb-hj-hesti-oql94": {
+      "id": "uji-coba-nota-ssb-hj-hesti-oql94",
+      "adminPin": "4336",
+      "title": "Uji Coba Nota SSB Hj Hesti",
+      "picName": "Bendahara",
+      "date": "2026-09-16",
+      "time": "12:00",
+      "restaurantName": "Soto SSB Hj. Hesti",
+      "restaurantAddress": "",
+      "taxConfig": {
+        "useTax": true,
+        "taxPercent": 10,
+        "useServiceCharge": false,
+        "serviceChargePercent": 0,
+        "rounding": "floor_1000"
+      },
+      "menuItems": [
+        {
+          "id": "m1",
+          "name": "Item Paket",
+          "price": 187500,
+          "category": "Menu Makanan"
+        }
+      ],
+      "isLocked": false,
+      "createdAt": "2026-09-16T07:55:23.436Z",
+      "updatedAt": "2026-09-16T07:55:23.437Z"
+    }
+  },
+  "orders": {
+    "makan-siang-tim-it": [
+      {
+        "id": "ord_1",
+        "eventId": "makan-siang-tim-it",
+        "userName": "Rian IT",
+        "items": [
+          {
+            "menuItemId": "menu_1",
+            "menuItemName": "Nasi Ayam Bakar Madu Spesial",
+            "price": 28000,
+            "quantity": 1,
+            "notes": "Sambal dipisah ya"
+          },
+          {
+            "menuItemId": "menu_4",
+            "menuItemName": "Es Teh Manis Jumbo",
+            "price": 6000,
+            "quantity": 1,
+            "notes": "Es sedikit"
+          }
+        ],
+        "subtotal": 34000,
+        "taxAmount": 3400,
+        "serviceAmount": 0,
+        "roundingAmount": 600,
+        "totalAmount": 38000,
+        "isPaid": true,
+        "createdAt": "2026-09-16T08:15:00.000Z",
+        "updatedAt": "2026-09-16T08:15:00.000Z"
+      },
+      {
+        "id": "ord_2",
+        "eventId": "makan-siang-tim-it",
+        "userName": "Siti Product",
+        "items": [
+          {
+            "menuItemId": "menu_2",
+            "menuItemName": "Nasi Bebek Goreng Sambal Korek",
+            "price": 34000,
+            "quantity": 1,
+            "notes": "Pedas sedang"
+          },
+          {
+            "menuItemId": "menu_5",
+            "menuItemName": "Es Jeruk Peras Murni",
+            "price": 9000,
+            "quantity": 1,
+            "notes": "Gula sedikit"
+          }
+        ],
+        "subtotal": 43000,
+        "taxAmount": 4300,
+        "serviceAmount": 0,
+        "roundingAmount": 700,
+        "totalAmount": 48000,
+        "isPaid": false,
+        "createdAt": "2026-09-16T08:20:00.000Z",
+        "updatedAt": "2026-09-16T08:20:00.000Z"
+      },
+      {
+        "id": "ord_3",
+        "eventId": "makan-siang-tim-it",
+        "userName": "Doni QA",
+        "items": [
+          {
+            "menuItemId": "menu_1",
+            "menuItemName": "Nasi Ayam Bakar Madu Spesial",
+            "price": 28000,
+            "quantity": 1,
+            "notes": "Pedas nampol"
+          },
+          {
+            "menuItemId": "menu_6",
+            "menuItemName": "Tahu Tempe Goreng (Isi 4)",
+            "price": 12000,
+            "quantity": 1,
+            "notes": ""
+          },
+          {
+            "menuItemId": "menu_4",
+            "menuItemName": "Es Teh Manis Jumbo",
+            "price": 6000,
+            "quantity": 1,
+            "notes": "Manis"
+          }
+        ],
+        "subtotal": 46000,
+        "taxAmount": 4600,
+        "serviceAmount": 0,
+        "roundingAmount": 400,
+        "totalAmount": 51000,
+        "isPaid": true,
+        "createdAt": "2026-09-16T08:25:00.000Z",
+        "updatedAt": "2026-09-16T08:25:00.000Z"
+      },
+      {
+        "id": "ord_8eZ1YeC_",
+        "eventId": "makan-siang-tim-it",
+        "userName": "Dian HR",
+        "items": [
+          {
+            "menuItemId": "menu_3",
+            "menuItemName": "Nasi Rawon Daging Sapi",
+            "price": 32000,
+            "quantity": 1,
+            "notes": "Tanpa tauge"
+          },
+          {
+            "menuItemId": "menu_4",
+            "menuItemName": "Es Teh Manis Jumbo",
+            "price": 6000,
+            "quantity": 1,
+            "notes": "Tawar hangat"
+          }
+        ],
+        "subtotal": 38000,
+        "taxAmount": 3800,
+        "serviceAmount": 0,
+        "roundingAmount": 200,
+        "totalAmount": 42000,
+        "isPaid": false,
+        "createdAt": "2026-09-16T07:39:16.030Z",
+        "updatedAt": "2026-09-16T07:39:16.030Z"
+      }
+    ],
+    "uji-coba-nota-ssb-hj-hesti-oql94": [
+      {
+        "id": "ord_AaGCbrAl",
+        "eventId": "uji-coba-nota-ssb-hj-hesti-oql94",
+        "userName": "Karyawan 1",
+        "items": [
+          {
+            "menuItemId": "m1",
+            "menuItemName": "Item Paket",
+            "price": 187500,
+            "quantity": 1,
+            "notes": ""
+          }
+        ],
+        "subtotal": 187500,
+        "taxAmount": 18750,
+        "serviceAmount": 0,
+        "roundingAmount": -250,
+        "totalAmount": 206000,
+        "isPaid": false,
+        "createdAt": "2026-09-16T07:55:23.453Z",
+        "updatedAt": "2026-09-16T07:55:23.453Z"
+      }
+    ]
+  }
+}
