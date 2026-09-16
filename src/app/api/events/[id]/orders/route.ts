@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { calculateOrder } from '@/lib/calculator';
 import { UserOrder, OrderItem } from '@/types';
@@ -10,11 +10,12 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const event = db.getEvent(id);
+    const cleanId = decodeURIComponent(id || '').trim();
+    const event = await db.getEvent(cleanId);
     if (!event) {
       return NextResponse.json({ success: false, message: 'Acara tidak ditemukan' }, { status: 404 });
     }
-    const orders = db.getOrders(id);
+    const orders = await db.getOrders(event.id);
     return NextResponse.json({ success: true, data: orders });
   } catch (error) {
     console.error('Error fetching orders:', error);
@@ -28,7 +29,8 @@ export async function POST(
 ) {
   try {
     const { id } = await context.params;
-    const event = db.getEvent(id);
+    const cleanId = decodeURIComponent(id || '').trim();
+    const event = await db.getEvent(cleanId);
 
     if (!event) {
       return NextResponse.json({ success: false, message: 'Acara tidak ditemukan' }, { status: 404 });
@@ -55,7 +57,6 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Pilih minimal satu menu' }, { status: 400 });
     }
 
-    // Filter valid quantity
     const validItems: OrderItem[] = items
       .filter((it: OrderItem) => it.quantity > 0)
       .map((it: OrderItem) => ({
@@ -74,7 +75,7 @@ export async function POST(
 
     const userOrder: UserOrder = {
       id: orderId || `ord_${nanoid(8)}`,
-      eventId: id,
+      eventId: event.id,
       userName: userName.trim(),
       items: validItems,
       subtotal: calc.subtotal,
@@ -87,7 +88,7 @@ export async function POST(
       updatedAt: new Date().toISOString(),
     };
 
-    const saved = db.saveOrder(userOrder);
+    const saved = await db.saveOrder(userOrder);
 
     return NextResponse.json({
       success: true,
@@ -106,6 +107,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
+    const cleanId = decodeURIComponent(id || '').trim();
     const body = await req.json();
     const { orderId, isPaid, action } = body;
 
@@ -114,12 +116,12 @@ export async function PATCH(
     }
 
     if (action === 'delete') {
-      const deleted = db.deleteOrder(id, orderId);
+      const deleted = await db.deleteOrder(cleanId, orderId);
       return NextResponse.json({ success: deleted, message: deleted ? 'Pesanan dihapus' : 'Gagal menghapus' });
     }
 
     if (typeof isPaid === 'boolean') {
-      const updated = db.updateOrderStatus(id, orderId, isPaid);
+      const updated = await db.updateOrderStatus(cleanId, orderId, isPaid);
       return NextResponse.json({ success: updated, message: 'Status pembayaran diperbarui' });
     }
 

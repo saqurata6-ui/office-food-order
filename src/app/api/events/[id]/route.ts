@@ -8,10 +8,10 @@ export async function GET(
   try {
     const { id } = await context.params;
     const cleanId = decodeURIComponent(id || '').trim();
-    const event = db.getEvent(cleanId);
+    const event = await db.getEvent(cleanId);
 
     if (!event) {
-      const allEvents = db.getAllEvents().map((e) => ({
+      const allEvents = (await db.getAllEvents()).map((e) => ({
         id: e.id,
         title: e.title,
         date: e.date,
@@ -24,7 +24,7 @@ export async function GET(
       );
     }
 
-    const orders = db.getOrders(id);
+    const orders = await db.getOrders(event.id);
 
     const url = new URL(req.url);
     const pin = url.searchParams.get('pin');
@@ -54,7 +54,8 @@ export async function PATCH(
 ) {
   try {
     const { id } = await context.params;
-    const event = db.getEvent(id);
+    const cleanId = decodeURIComponent(id || '').trim();
+    const event = await db.getEvent(cleanId);
 
     if (!event) {
       return NextResponse.json(
@@ -74,17 +75,17 @@ export async function PATCH(
     }
 
     if (typeof isLocked === 'boolean') {
-      db.updateEventLock(id, isLocked);
+      await db.updateEventLock(event.id, isLocked);
     }
 
-    const updatedEvent = db.getEvent(id)!;
+    const updatedEvent = (await db.getEvent(event.id))!;
     if (menuItems && Array.isArray(menuItems)) {
       updatedEvent.menuItems = menuItems;
     }
     if (taxConfig) {
       updatedEvent.taxConfig = taxConfig;
     }
-    db.saveEvent(updatedEvent);
+    await db.saveEvent(updatedEvent);
 
     return NextResponse.json({
       success: true,

@@ -1,11 +1,11 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventData } from '@/types';
 import { nanoid } from 'nanoid';
 
 export async function GET() {
   try {
-    const events = db.getAllEvents();
+    const events = await db.getAllEvents();
     // Return sanitized list for privacy (hide adminPin)
     const sanitized = events.map((e) => ({
       id: e.id,
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
 
-    const saved = db.saveEvent(newEvent);
+    const saved = await db.saveEvent(newEvent);
 
     return NextResponse.json({
       success: true,
