@@ -26,6 +26,8 @@ import {
   Trash2,
   Search,
   MessageCircle,
+  Edit2,
+  Edit3,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem } from '@/types';
 import { formatRupiah } from '@/lib/calculator';
@@ -62,10 +64,11 @@ export default function EventAdminPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedWA, setCopiedWA] = useState(false);
 
-  // Add menu form state
+  // Add / Edit menu form state
   const [newMenuName, setNewMenuName] = useState('');
   const [newMenuPrice, setNewMenuPrice] = useState('');
   const [newMenuCategory, setNewMenuCategory] = useState('Makanan');
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -216,22 +219,59 @@ export default function EventAdminPage() {
     }
   };
 
-  // Add new menu item from admin
-  const handleAddMenuItem = async (e: React.FormEvent) => {
+  // Start editing existing menu item
+  const handleStartEditMenuItem = (item: MenuItem) => {
+    setEditingItemId(item.id);
+    setNewMenuName(item.name);
+    setNewMenuPrice(item.price.toString());
+    setNewMenuCategory(item.category || 'Makanan');
+    // Scroll smoothly to form
+    const formElement = document.getElementById('menu-item-form');
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // Cancel editing
+  const handleCancelEditMenuItem = () => {
+    setEditingItemId(null);
+    setNewMenuName('');
+    setNewMenuPrice('');
+    setNewMenuCategory('Makanan');
+  };
+
+  // Add or update menu item from admin
+  const handleSaveMenuItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMenuName.trim() || !newMenuPrice || !event) return;
 
-    const price = parseInt(newMenuPrice.replace(/\D/g, ''), 10);
+    const price = parseInt(newMenuPrice.toString().replace(/\D/g, ''), 10);
     if (isNaN(price) || price <= 0) return;
 
-    const newItem: MenuItem = {
-      id: `item_${nanoid(6)}`,
-      name: newMenuName.trim(),
-      price,
-      category: newMenuCategory,
-    };
+    let updatedMenuItems: MenuItem[];
 
-    const updatedMenuItems = [...event.menuItems, newItem];
+    if (editingItemId) {
+      // Update existing item
+      updatedMenuItems = event.menuItems.map((it) =>
+        it.id === editingItemId
+          ? {
+              ...it,
+              name: newMenuName.trim(),
+              price,
+              category: newMenuCategory,
+            }
+          : it
+      );
+    } else {
+      // Add new item
+      const newItem: MenuItem = {
+        id: `item_${nanoid(6)}`,
+        name: newMenuName.trim(),
+        price,
+        category: newMenuCategory,
+      };
+      updatedMenuItems = [...event.menuItems, newItem];
+    }
 
     try {
       const res = await fetch(`/api/events/${eventId}`, {
@@ -246,11 +286,45 @@ export default function EventAdminPage() {
       const json = await res.json();
       if (json.success) {
         setEvent((prev) => (prev ? { ...prev, menuItems: updatedMenuItems } : null));
-        setNewMenuName('');
-        setNewMenuPrice('');
+        handleCancelEditMenuItem();
+      } else {
+        alert(json.message || 'Gagal menyimpan perubahan menu.');
       }
     } catch (err) {
       console.error(err);
+      alert('Terjadi kesalahan saat menyimpan menu.');
+    }
+  };
+
+  // Delete menu item from admin
+  const handleDeleteMenuItem = async (itemId: string, itemName: string) => {
+    if (!event) return;
+    if (!confirm(`Hapus menu "${itemName}" dari daftar acara?`)) return;
+
+    const updatedMenuItems = event.menuItems.filter((it) => it.id !== itemId);
+
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          menuItems: updatedMenuItems,
+          adminPin,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setEvent((prev) => (prev ? { ...prev, menuItems: updatedMenuItems } : null));
+        if (editingItemId === itemId) {
+          handleCancelEditMenuItem();
+        }
+      } else {
+        alert(json.message || 'Gagal menghapus menu.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus menu.');
     }
   };
 
@@ -891,40 +965,79 @@ export default function EventAdminPage() {
       {/* TAB 3: KELOLA MENU */}
       {activeTab === 'menu' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-6">
-          <div className="pb-3 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Kelola Menu Makanan & Minuman</h2>
-            <p className="text-xs text-slate-500">
-              Tambah item menu baru jika restoran menyediakan menu tambahan yang belum tercantum.
-            </p>
+          <div className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Kelola Menu Makanan & Minuman</h2>
+              <p className="text-xs text-slate-500">
+                Tambah, ubah nama/harga/kategori, atau hapus menu restoran untuk acara ini.
+              </p>
+            </div>
+            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full shrink-0">
+              Total: {event.menuItems.length} Menu
+            </span>
           </div>
 
-          {/* Form Add New Menu Item */}
-          <form onSubmit={handleAddMenuItem} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <span className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-              + Tambah Menu Baru
-            </span>
+          {/* Form Add or Edit Menu Item */}
+          <form
+            id="menu-item-form"
+            onSubmit={handleSaveMenuItem}
+            className={`p-4 rounded-xl border transition space-y-3 ${
+              editingItemId
+                ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-300/50'
+                : 'bg-slate-50 border-slate-200'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="block text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                {editingItemId ? (
+                  <>
+                    <Edit3 className="w-4 h-4 text-amber-600" />
+                    <span className="text-amber-900">Edit Menu</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 text-orange-600" />
+                    <span>Tambah Menu Baru</span>
+                  </>
+                )}
+              </span>
+
+              {editingItemId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEditMenuItem}
+                  className="text-xs text-slate-500 hover:text-slate-700 underline font-medium"
+                >
+                  Batal Edit
+                </button>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
               <div className="sm:col-span-5">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Menu</label>
                 <input
                   type="text"
-                  placeholder="Nama menu..."
+                  placeholder="Contoh: Soto Ayam Campur"
                   value={newMenuName}
                   onChange={(e) => setNewMenuName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
                 />
               </div>
 
               <div className="sm:col-span-3">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Harga (Rp)</label>
                 <input
                   type="number"
-                  placeholder="Harga (misal: 25000)"
+                  placeholder="Contoh: 15000"
                   value={newMenuPrice}
                   onChange={(e) => setNewMenuPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
                 />
               </div>
 
               <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Kategori</label>
                 <select
                   value={newMenuCategory}
                   onChange={(e) => setNewMenuCategory(e.target.value)}
@@ -938,31 +1051,94 @@ export default function EventAdminPage() {
                 </select>
               </div>
 
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 flex items-end gap-1.5">
                 <button
                   type="submit"
                   disabled={!newMenuName.trim() || !newMenuPrice}
-                  className="w-full py-2 px-3 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-40 text-white text-xs font-semibold transition"
+                  className={`w-full py-2 px-3 rounded-lg disabled:opacity-40 text-white text-xs font-bold transition flex items-center justify-center gap-1 shadow-xs ${
+                    editingItemId
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-orange-600 hover:bg-orange-700'
+                  }`}
                 >
-                  Tambah
+                  {editingItemId ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      Simpan
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-3.5 h-3.5" />
+                      Tambah
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </form>
 
-          {/* Existing Menu Items */}
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-slate-700">Daftar Menu Saat Ini ({event.menuItems.length} menu):</span>
+          {/* Existing Menu Items List */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700">
+                Daftar Menu ({event.menuItems.length}):
+              </span>
+              <p className="text-[11px] text-slate-400">
+                Klik ikon pensil ✏️ untuk mengedit atau tempat sampah 🗑️ untuk menghapus menu.
+              </p>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {event.menuItems.map((item) => (
-                <div key={item.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-slate-900 block">{item.name}</span>
-                    <span className="text-[11px] text-slate-500">{item.category}</span>
+              {event.menuItems.map((item) => {
+                const isItemBeingEdited = editingItemId === item.id;
+                return (
+                  <div
+                    key={item.id}
+                    className={`p-3.5 rounded-xl border transition flex items-center justify-between text-xs ${
+                      isItemBeingEdited
+                        ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400'
+                        : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 shadow-2xs'
+                    }`}
+                  >
+                    <div className="pr-2 overflow-hidden">
+                      <span className="font-bold text-slate-900 block truncate text-sm">
+                        {item.name}
+                      </span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-600 font-medium">
+                          {item.category || 'Makanan'}
+                        </span>
+                        <span className="font-extrabold text-orange-600">
+                          {formatRupiah(item.price)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEditMenuItem(item)}
+                        className={`p-1.5 rounded-lg border transition ${
+                          isItemBeingEdited
+                            ? 'bg-amber-200 border-amber-400 text-amber-900'
+                            : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-orange-600'
+                        }`}
+                        title="Edit nama atau harga menu ini"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMenuItem(item.id, item.name)}
+                        className="p-1.5 rounded-lg border bg-white hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 transition"
+                        title="Hapus menu ini"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <span className="font-bold text-orange-600">{formatRupiah(item.price)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
