@@ -279,6 +279,9 @@ export const db = {
             roundingAmount: Number(d.rounding_amount),
             totalAmount: Number(d.total_amount),
             isPaid: Boolean(d.is_paid),
+            paymentMethod: d.payment_method || undefined,
+            paidAmount: d.paid_amount != null ? Number(d.paid_amount) : undefined,
+            changeAmount: d.change_amount != null ? Number(d.change_amount) : undefined,
             createdAt: d.created_at,
             updatedAt: d.updated_at,
           }));
@@ -315,6 +318,9 @@ export const db = {
           rounding_amount: orderToSave.roundingAmount,
           total_amount: orderToSave.totalAmount,
           is_paid: orderToSave.isPaid,
+          payment_method: orderToSave.paymentMethod || null,
+          paid_amount: orderToSave.paidAmount ?? null,
+          change_amount: orderToSave.changeAmount ?? null,
           created_at: orderToSave.createdAt || now,
           updated_at: now,
         }, {
@@ -348,15 +354,34 @@ export const db = {
     return orderToSave;
   },
 
-  async updateOrderStatus(eventId: string, orderId: string, isPaid: boolean): Promise<boolean> {
+  async updateOrderStatus(
+    eventId: string,
+    orderId: string,
+    isPaid: boolean,
+    paymentDetails?: {
+      paymentMethod?: 'cash' | 'transfer';
+      paidAmount?: number;
+      changeAmount?: number;
+    }
+  ): Promise<boolean> {
     const cleanEventId = eventId.trim().toLowerCase();
     const now = new Date().toISOString();
+
+    const paymentMethod = paymentDetails?.paymentMethod || (isPaid ? 'transfer' : undefined);
+    const paidAmount = paymentDetails?.paidAmount;
+    const changeAmount = paymentDetails?.changeAmount;
 
     if (supabase) {
       try {
         await supabase
           .from('orders')
-          .update({ is_paid: isPaid, updated_at: now })
+          .update({
+            is_paid: isPaid,
+            payment_method: isPaid ? paymentMethod : null,
+            paid_amount: isPaid ? paidAmount : null,
+            change_amount: isPaid ? changeAmount : null,
+            updated_at: now,
+          })
           .eq('id', orderId);
       } catch (sbErr) {
         console.error('Supabase updateOrderStatus error:', sbErr);
@@ -369,6 +394,9 @@ export const db = {
       const ord = list.find((o) => o.id === orderId);
       if (ord) {
         ord.isPaid = isPaid;
+        ord.paymentMethod = isPaid ? paymentMethod : undefined;
+        ord.paidAmount = isPaid ? paidAmount : undefined;
+        ord.changeAmount = isPaid ? changeAmount : undefined;
         ord.updatedAt = now;
         saveDb(cache);
         return true;

@@ -63,6 +63,9 @@ export interface UserOrder {
   roundingAmount: number;
   totalAmount: number;
   isPaid: boolean;
+  paymentMethod?: 'cash' | 'transfer';
+  paidAmount?: number;
+  changeAmount?: number;
   createdAt: string;
   updatedAt: string;
 }

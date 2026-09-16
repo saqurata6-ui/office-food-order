@@ -112,7 +112,7 @@ export function exportToExcel(event: EventData, orders: UserOrder[]) {
     [`PPN: ${event.taxConfig.useTax ? `${event.taxConfig.taxPercent}%` : 'Tidak'}`],
     [`Pembulatan: ${event.taxConfig.rounding === 'none' ? 'Tidak Ada' : `Rp ${event.taxConfig.rounding}`}`],
     [],
-    ['No', 'Nama', 'Rincian Menu', 'Subtotal', 'PPN', 'Pembulatan', 'Total Bayar', 'Status Bayar'],
+    ['No', 'Nama', 'Rincian Menu', 'Subtotal', 'PPN', 'Pembulatan', 'Total Bayar', 'Status Bayar', 'Metode Bayar', 'Uang Diterima', 'Kembalian'],
     ...orders.map((order, idx) => [
       idx + 1,
       order.userName,
@@ -122,6 +122,9 @@ export function exportToExcel(event: EventData, orders: UserOrder[]) {
       order.roundingAmount,
       order.totalAmount,
       order.isPaid ? 'Lunas' : 'Belum Bayar',
+      order.isPaid ? (order.paymentMethod === 'cash' ? 'Cash' : 'Transfer') : '-',
+      order.paidAmount ? order.paidAmount : (order.isPaid ? order.totalAmount : '-'),
+      order.changeAmount != null ? order.changeAmount : (order.isPaid ? 0 : '-'),
     ]),
     [],
     [
@@ -196,16 +199,28 @@ export function exportToPdf(event: EventData, orders: UserOrder[]) {
   doc.setFontSize(13);
   doc.text('2. Rekap Tagihan per Karyawan (Split Bill)', 14, nextY);
 
-  const splitRows = orders.map((order, idx) => [
-    idx + 1,
-    order.userName,
-    order.items.map((it) => `${it.quantity}x ${it.menuItemName}`).join(', '),
-    formatRupiah(order.subtotal),
-    formatRupiah(order.taxAmount),
-    formatRupiah(order.roundingAmount),
-    formatRupiah(order.totalAmount),
-    order.isPaid ? 'Lunas' : 'Belum',
-  ]);
+  const splitRows = orders.map((order, idx) => {
+    let statusText = 'Belum';
+    if (order.isPaid) {
+      if (order.paymentMethod === 'cash') {
+        statusText = order.changeAmount && order.changeAmount > 0
+          ? `Lunas (Cash, Kemb: ${formatRupiah(order.changeAmount)})`
+          : 'Lunas (Cash)';
+      } else {
+        statusText = 'Lunas (TF)';
+      }
+    }
+    return [
+      idx + 1,
+      order.userName,
+      order.items.map((it) => `${it.quantity}x ${it.menuItemName}`).join(', '),
+      formatRupiah(order.subtotal),
+      formatRupiah(order.taxAmount),
+      formatRupiah(order.roundingAmount),
+      formatRupiah(order.totalAmount),
+      statusText,
+    ];
+  });
 
   const totalAll = orders.reduce((sum, o) => sum + o.totalAmount, 0);
   splitRows.push([

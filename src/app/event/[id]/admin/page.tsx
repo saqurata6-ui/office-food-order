@@ -29,6 +29,8 @@ import {
   Edit2,
   Edit3,
   ArrowUpDown,
+  Banknote,
+  Wallet,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem } from '@/types';
 import { formatRupiah } from '@/lib/calculator';
@@ -71,6 +73,11 @@ export default function EventAdminPage() {
   const [newMenuPrice, setNewMenuPrice] = useState('');
   const [newMenuCategory, setNewMenuCategory] = useState('Makanan');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+
+  // Payment Modal state
+  const [paymentModalOrder, setPaymentModalOrder] = useState<UserOrder | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash'>('cash');
+  const [cashGivenAmount, setCashGivenAmount] = useState<string>('');
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -175,26 +182,119 @@ export default function EventAdminPage() {
     }
   };
 
-  // Toggle isPaid for an order
-  const handleTogglePaid = async (orderId: string, currentPaid: boolean) => {
+  // Open modal to record payment
+  const handleOpenPaymentModal = (order: UserOrder) => {
+    if (order.isPaid) {
+      // If already paid, ask if admin wants to mark as unpaid
+      if (confirm(`Ubah status pesanan "${order.userName}" kembali ke BELUM BAYAR?`)) {
+        handleToggleUnpaid(order.id);
+      }
+      return;
+    }
+
+    setPaymentModalOrder(order);
+    setPaymentMethod(order.paymentMethod || 'cash');
+    // Default cash amount to exact amount
+    setCashGivenAmount(order.paidAmount ? order.paidAmount.toString() : order.totalAmount.toString());
+  };
+
+  const handleClosePaymentModal = () => {
+    setPaymentModalOrder(null);
+    setCashGivenAmount('');
+  };
+
+  // Mark as unpaid
+  const handleToggleUnpaid = async (orderId: string) => {
     try {
       const res = await fetch(`/api/events/${eventId}/orders`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
-          isPaid: !currentPaid,
+          isPaid: false,
         }),
       });
 
       const json = await res.json();
       if (json.success) {
         setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, isPaid: !currentPaid } : o))
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  isPaid: false,
+                  paymentMethod: undefined,
+                  paidAmount: undefined,
+                  changeAmount: undefined,
+                }
+              : o
+          )
         );
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Confirm payment with details (Cash vs Transfer & Kembalian)
+  const handleConfirmPayment = async () => {
+    if (!paymentModalOrder) return;
+
+    const totalToPay = paymentModalOrder.totalAmount;
+    let paidVal = totalToPay;
+    let changeVal = 0;
+
+    if (paymentMethod === 'cash') {
+      const parsedCash = parseInt(cashGivenAmount.replace(/\D/g, ''), 10);
+      if (isNaN(parsedCash) || parsedCash < totalToPay) {
+        alert(
+          `Uang tunai yang diserahkan (${formatRupiah(parsedCash || 0)}) kurang dari tagihan (${formatRupiah(totalToPay)})!`
+        );
+        return;
+      }
+      paidVal = parsedCash;
+      changeVal = parsedCash - totalToPay;
+    } else {
+      // Transfer: amount paid is exact total
+      paidVal = totalToPay;
+      changeVal = 0;
+    }
+
+    try {
+      const res = await fetch(`/api/events/${eventId}/orders`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: paymentModalOrder.id,
+          isPaid: true,
+          paymentMethod,
+          paidAmount: paidVal,
+          changeAmount: changeVal,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === paymentModalOrder.id
+              ? {
+                  ...o,
+                  isPaid: true,
+                  paymentMethod,
+                  paidAmount: paidVal,
+                  changeAmount: changeVal,
+                }
+              : o
+          )
+        );
+        handleClosePaymentModal();
+      } else {
+        alert(json.message || 'Gagal memperbarui status bayar.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi.');
     }
   };
 
@@ -924,23 +1024,36 @@ export default function EventAdminPage() {
                       <td className="py-3 px-4 text-center">
                         <button
                           type="button"
-                          onClick={() => handleTogglePaid(order.id, order.isPaid)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-[11px] transition ${
+                          onClick={() => handleOpenPaymentModal(order)}
+                          className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl font-bold text-xs transition border ${
                             order.isPaid
-                              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-2xs'
+                              : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200 hover:border-slate-300'
                           }`}
+                          title={order.isPaid ? 'Klik untuk membatalkan atau melihat status' : 'Klik untuk mencatat pembayaran'}
                         >
-                          {order.isPaid ? (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Lunas</span>
-                            </>
-                          ) : (
-                            <>
-                              <div className="w-3.5 h-3.5 rounded-full border border-slate-400" />
-                              <span>Belum Bayar</span>
-                            </>
+                          <div className="flex items-center gap-1.5">
+                            {order.isPaid ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Lunas {order.paymentMethod === 'cash' ? '(Cash)' : '(Transfer)'}</span>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400" />
+                                <span>Belum Bayar</span>
+                              </>
+                            )}
+                          </div>
+
+                          {order.isPaid && order.paymentMethod === 'cash' && (
+                            <div className="text-[10px] text-emerald-700 font-medium">
+                              {order.changeAmount && order.changeAmount > 0 ? (
+                                <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
+                              ) : (
+                                <span>Uang Pas</span>
+                              )}
+                            </div>
                           )}
                         </button>
                       </td>
@@ -1160,6 +1273,185 @@ export default function EventAdminPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PENCATATAN PEMBAYARAN (CASH / TF / KEMBALIAN) */}
+      {paymentModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-base text-slate-900">
+                  Catat Pembayaran
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Pemesan: <strong className="text-slate-800">{paymentModalOrder.userName}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleClosePaymentModal}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Total Tagihan Box */}
+            <div className="p-3.5 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
+              <div>
+                <span className="text-xs text-orange-800 font-medium block">Total Tagihan:</span>
+                <span className="text-xl font-black text-orange-600">
+                  {formatRupiah(paymentModalOrder.totalAmount)}
+                </span>
+              </div>
+              <span className="text-[11px] text-orange-700 bg-orange-100 px-2.5 py-1 rounded-lg font-bold">
+                {paymentModalOrder.items.reduce((sum, it) => sum + it.quantity, 0)} Porsi
+              </span>
+            </div>
+
+            {/* Metode Pembayaran: Cash / Transfer */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Metode Pembayaran
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod('cash');
+                    setCashGivenAmount(paymentModalOrder.totalAmount.toString());
+                  }}
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    paymentMethod === 'cash'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Banknote className="w-4 h-4" />
+                  <span>Cash / Tunai</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('transfer')}
+                  className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    paymentMethod === 'transfer'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span>Transfer Bank / QRIS</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Input Cash & Hitung Kembalian */}
+            {paymentMethod === 'cash' ? (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Uang Diterima dari Pemesan (Rp)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">Rp</span>
+                    <input
+                      type="number"
+                      placeholder="Masukkan jumlah uang tunai..."
+                      value={cashGivenAmount}
+                      onChange={(e) => setCashGivenAmount(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Quick Cash Buttons */}
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCashGivenAmount(paymentModalOrder.totalAmount.toString())}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                  >
+                    Uang Pas ({formatRupiah(paymentModalOrder.totalAmount)})
+                  </button>
+                  {[20000, 50000, 100000].map((nominal) => {
+                    if (nominal >= paymentModalOrder.totalAmount) {
+                      return (
+                        <button
+                          key={nominal}
+                          type="button"
+                          onClick={() => setCashGivenAmount(nominal.toString())}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                        >
+                          {formatRupiah(nominal)}
+                        </button>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+
+                {/* Kembalian Display Box */}
+                {(() => {
+                  const parsed = parseInt(cashGivenAmount.replace(/\D/g, ''), 10) || 0;
+                  const diff = parsed - paymentModalOrder.totalAmount;
+                  if (diff > 0) {
+                    return (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+                        <span className="text-emerald-800 font-semibold">Uang Kembalian:</span>
+                        <span className="text-base font-extrabold text-emerald-700">
+                          {formatRupiah(diff)}
+                        </span>
+                      </div>
+                    );
+                  } else if (diff === 0) {
+                    return (
+                      <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 font-bold text-center">
+                        ✓ Uang Pas (Tidak ada kembalian)
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-bold flex items-center justify-between">
+                        <span>Uang Kurang:</span>
+                        <span>{formatRupiah(Math.abs(diff))}</span>
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
+            ) : (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 space-y-1">
+                <span className="font-bold block">Pembayaran via Transfer / QRIS:</span>
+                <p className="text-[11px] text-blue-700 leading-relaxed">
+                  Status akan otomatis dicatat sebagai <strong>Lunas (Transfer)</strong> sebesar{' '}
+                  <strong>{formatRupiah(paymentModalOrder.totalAmount)}</strong> sesuai nominal tagihan.
+                </p>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleClosePaymentModal}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition"
+              >
+                Batal
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmPayment}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Simpan Pembayaran</span>
+              </button>
             </div>
           </div>
         </div>
