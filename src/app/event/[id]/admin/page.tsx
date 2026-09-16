@@ -62,7 +62,12 @@ export default function EventAdminPage() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<'resto' | 'splitbill' | 'menu'>('resto');
   const [searchName, setSearchName] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
   const [restoSortBy, setRestoSortBy] = useState<'first_added' | 'latest_added' | 'qty_desc' | 'name_asc'>('first_added');
+
+  // Tab 3: Menu search & filter
+  const [searchMenuQuery, setSearchMenuQuery] = useState('');
+  const [selectedMenuCategory, setSelectedMenuCategory] = useState('Semua');
 
   // Copy / Share Feedback
   const [copiedLink, setCopiedLink] = useState(false);
@@ -458,11 +463,61 @@ export default function EventAdminPage() {
 
   // Filtered orders in split-bill tab
   const filteredOrders = useMemo(() => {
-    if (!searchName.trim()) return orders;
-    return orders.filter((o) =>
-      o.userName.toLowerCase().includes(searchName.toLowerCase().trim())
-    );
-  }, [orders, searchName]);
+    let result = orders;
+    if (searchName.trim()) {
+      result = result.filter((o) =>
+        o.userName.toLowerCase().includes(searchName.toLowerCase().trim())
+      );
+    }
+    if (paymentFilter === 'unpaid') {
+      result = result.filter((o) => !o.isPaid);
+    } else if (paymentFilter === 'paid') {
+      result = result.filter((o) => o.isPaid);
+    }
+    return result;
+  }, [orders, searchName, paymentFilter]);
+
+  // Categories in Tab 3
+  const menuCategories = useMemo(() => {
+    if (!event) return ['Semua'];
+    const cats = Array.from(new Set(event.menuItems.map((m) => m.category || 'Makanan')));
+    return ['Semua', ...cats];
+  }, [event]);
+
+  // Filtered menu items in Tab 3
+  const filteredMenuItems = useMemo(() => {
+    if (!event) return [];
+    return event.menuItems.filter((m) => {
+      const matchesCat = selectedMenuCategory === 'Semua' || (m.category || 'Makanan') === selectedMenuCategory;
+      const matchesQuery = !searchMenuQuery.trim() || m.name.toLowerCase().includes(searchMenuQuery.toLowerCase().trim());
+      return matchesCat && matchesQuery;
+    });
+  }, [event, selectedMenuCategory, searchMenuQuery]);
+
+  // Share individual bill breakdown via WhatsApp
+  const shareIndividualWhatsApp = (order: UserOrder) => {
+    if (!event) return;
+    const itemsText = order.items
+      .map((it) => `• ${it.quantity}x ${it.menuItemName}${it.notes ? ` (${it.notes})` : ''} = ${formatRupiah(it.price * it.quantity)}`)
+      .join('\n');
+
+    let taxText = '';
+    if (order.taxAmount > 0) {
+      taxText = `\nPPN: +${formatRupiah(order.taxAmount)}`;
+    }
+    let roundingText = '';
+    if (order.roundingAmount !== 0) {
+      roundingText = `\nPembulatan: ${order.roundingAmount > 0 ? '+' : ''}${formatRupiah(order.roundingAmount)}`;
+    }
+
+    const paymentStatusText = order.isPaid
+      ? `✅ *Status: LUNAS* (${order.paymentMethod === 'cash' ? 'Cash / Tunai' : 'Transfer'})`
+      : `⏳ *Status: BELUM LUNAS*`;
+
+    const msg = `Halo kak *${order.userName}*! 👋\nBerikut rincian pesanan makan kantor untuk acara *"${event.title}"* (${event.restaurantName}):\n\n${itemsText}\n\n*Subtotal:* ${formatRupiah(order.subtotal)}${taxText}${roundingText}\n*Total Tagihan:* *${formatRupiah(order.totalAmount)}*\n${paymentStatusText}\n\nPembayaran dapat diserahkan ke PIC (*${event.picName}*).\nTerima kasih! 🙏`;
+
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+  };
 
   const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/order/${eventId}` : '';
 
@@ -799,20 +854,25 @@ export default function EventAdminPage() {
         </div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-200">
+      {/* Tabs Navigation (Responsive Segmented Control) */}
+      <div className="bg-slate-100 p-1.5 rounded-2xl border border-slate-200 grid grid-cols-3 gap-1">
         <button
           type="button"
           onClick={() => setActiveTab('resto')}
-          className={`pb-3 px-4 text-sm font-bold border-b-2 transition flex items-center gap-2 ${
+          className={`py-2 px-1.5 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 ${
             activeTab === 'resto'
-              ? 'border-orange-600 text-orange-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'bg-white text-orange-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
           }`}
         >
-          <Utensils className="w-4 h-4" />
-          <span>Rekap Pesanan Restoran</span>
-          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">
+          <Utensils className="w-4 h-4 shrink-0" />
+          <span className="truncate">
+            <span className="sm:hidden">Pesanan</span>
+            <span className="hidden sm:inline">Rekap Resto</span>
+          </span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-extrabold ${
+            activeTab === 'resto' ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-600'
+          }`}>
             {groupedOrders.length}
           </span>
         </button>
@@ -820,15 +880,20 @@ export default function EventAdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab('splitbill')}
-          className={`pb-3 px-4 text-sm font-bold border-b-2 transition flex items-center gap-2 ${
+          className={`py-2 px-1.5 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 ${
             activeTab === 'splitbill'
-              ? 'border-orange-600 text-orange-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'bg-white text-orange-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
           }`}
         >
-          <Users className="w-4 h-4" />
-          <span>Tagihan per Nama (Split Bill)</span>
-          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs">
+          <Users className="w-4 h-4 shrink-0" />
+          <span className="truncate">
+            <span className="sm:hidden">Tagihan</span>
+            <span className="hidden sm:inline">Tagihan (Split Bill)</span>
+          </span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-extrabold ${
+            activeTab === 'splitbill' ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-600'
+          }`}>
             {orders.length}
           </span>
         </button>
@@ -836,24 +901,32 @@ export default function EventAdminPage() {
         <button
           type="button"
           onClick={() => setActiveTab('menu')}
-          className={`pb-3 px-4 text-sm font-bold border-b-2 transition flex items-center gap-2 ${
+          className={`py-2 px-1.5 sm:px-4 rounded-xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-1.5 ${
             activeTab === 'menu'
-              ? 'border-orange-600 text-orange-600'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
+              ? 'bg-white text-orange-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
           }`}
         >
-          <Plus className="w-4 h-4" />
-          <span>Kelola Menu</span>
+          <Plus className="w-4 h-4 shrink-0" />
+          <span className="truncate">
+            <span className="sm:hidden">Menu</span>
+            <span className="hidden sm:inline">Kelola Menu</span>
+          </span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-extrabold ${
+            activeTab === 'menu' ? 'bg-orange-100 text-orange-700' : 'bg-slate-200 text-slate-600'
+          }`}>
+            {event.menuItems.length}
+          </span>
         </button>
       </div>
 
       {/* TAB 1: REKAP RESTORAN (KITCHEN VIEW) */}
       {activeTab === 'resto' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-5">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                Daftar Ringkasan Pesanan untuk Restoran
+                Daftar Ringkasan Pesanan Restoran
               </h2>
               <p className="text-xs text-slate-500">
                 Gunakan daftar ini saat memesan atau menyerahkan list ke pelayan/kasir resto.
@@ -862,7 +935,7 @@ export default function EventAdminPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Urutan selector */}
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl text-xs">
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs">
                 <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
                 <span className="text-[11px] font-semibold text-slate-600">Urutkan:</span>
                 <select
@@ -877,7 +950,7 @@ export default function EventAdminPage() {
                 </select>
               </div>
 
-              <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+              <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl shrink-0">
                 Total {totalPortions} Porsi
               </span>
             </div>
@@ -888,73 +961,135 @@ export default function EventAdminPage() {
               Belum ada pesanan yang masuk dari karyawan. Sebarkan public link di atas ke rekan kantor!
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
-                    <th className="py-3 px-4 w-12 text-center">No</th>
-                    <th className="py-3 px-4">Nama Menu</th>
-                    <th className="py-3 px-4 text-center">Jumlah Porsi</th>
-                    <th className="py-3 px-4 text-right">Harga Satuan</th>
-                    <th className="py-3 px-4 text-right">Subtotal</th>
-                    <th className="py-3 px-4">Catatan Khusus dari Pemesan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {groupedOrders.map((item, idx) => (
-                    <tr key={item.menuItemId} className="hover:bg-slate-50 transition">
-                      <td className="py-3 px-4 text-center font-mono text-slate-400">{idx + 1}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900 text-sm">{item.name}</td>
-                      <td className="py-3 px-4 text-center">
+            <>
+              {/* Mobile Card List View (sm:hidden) */}
+              <div className="sm:hidden divide-y divide-slate-100">
+                {groupedOrders.map((item, idx) => (
+                  <div key={item.menuItemId} className="py-3.5 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-900 text-sm leading-snug">
+                            {item.name}
+                          </h3>
+                          <span className="text-xs text-slate-500">
+                            @{formatRupiah(item.price)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 font-extrabold text-xs">
                           {item.totalQty} porsi
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-right text-slate-600">{formatRupiah(item.price)}</td>
-                      <td className="py-3 px-4 text-right font-bold text-slate-900">
-                        {formatRupiah(item.totalQty * item.price)}
-                      </td>
-                      <td className="py-3 px-4">
-                        {item.notes.length > 0 ? (
-                          <div className="space-y-1">
-                            {item.notes.map((n, nIdx) => (
-                              <div key={nIdx} className="bg-amber-50 text-amber-900 px-2 py-1 rounded text-[11px] font-medium border border-amber-200/60">
-                                {n}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 italic">Tidak ada catatan</span>
-                        )}
-                      </td>
+                        <p className="text-xs font-extrabold text-slate-900 mt-1">
+                          {formatRupiah(item.totalQty * item.price)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {item.notes.length > 0 && (
+                      <div className="pl-7 flex flex-wrap gap-1.5">
+                        {item.notes.map((n, nIdx) => (
+                          <span
+                            key={nIdx}
+                            className="bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-md text-[11px] font-medium"
+                          >
+                            📝 {n}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Mobile Summary Card */}
+                <div className="pt-4">
+                  <div className="p-3.5 rounded-xl bg-orange-50/70 border border-orange-200 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-slate-600 block text-[11px]">Total Pesanan:</span>
+                      <span className="font-extrabold text-orange-800 text-sm">{totalPortions} Porsi</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-slate-600 block text-[11px]">Total Tagihan Resto:</span>
+                      <span className="font-extrabold text-orange-900 text-base">{formatRupiah(totalRestoBill)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop Table View (hidden sm:block) */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
+                      <th className="py-3 px-4 w-12 text-center">No</th>
+                      <th className="py-3 px-4">Nama Menu</th>
+                      <th className="py-3 px-4 text-center">Jumlah Porsi</th>
+                      <th className="py-3 px-4 text-right">Harga Satuan</th>
+                      <th className="py-3 px-4 text-right">Subtotal</th>
+                      <th className="py-3 px-4">Catatan Khusus dari Pemesan</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900">
-                    <td colSpan={2} className="py-3 px-4 text-right">TOTAL PORSI:</td>
-                    <td className="py-3 px-4 text-center text-orange-600 text-sm">{totalPortions} Porsi</td>
-                    <td className="py-3 px-4 text-right">TOTAL:</td>
-                    <td className="py-3 px-4 text-right text-sm text-slate-900">{formatRupiah(totalRestoBill)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {groupedOrders.map((item, idx) => (
+                      <tr key={item.menuItemId} className="hover:bg-slate-50 transition">
+                        <td className="py-3 px-4 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900 text-sm">{item.name}</td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 font-extrabold text-xs">
+                            {item.totalQty} porsi
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right text-slate-600">{formatRupiah(item.price)}</td>
+                        <td className="py-3 px-4 text-right font-bold text-slate-900">
+                          {formatRupiah(item.totalQty * item.price)}
+                        </td>
+                        <td className="py-3 px-4">
+                          {item.notes.length > 0 ? (
+                            <div className="space-y-1">
+                              {item.notes.map((n, nIdx) => (
+                                <div key={nIdx} className="bg-amber-50 text-amber-900 px-2 py-1 rounded text-[11px] font-medium border border-amber-200/60">
+                                  {n}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">Tidak ada catatan</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900">
+                      <td colSpan={2} className="py-3 px-4 text-right">TOTAL PORSI:</td>
+                      <td className="py-3 px-4 text-center text-orange-600 text-sm">{totalPortions} Porsi</td>
+                      <td className="py-3 px-4 text-right">TOTAL:</td>
+                      <td className="py-3 px-4 text-right text-sm text-slate-900">{formatRupiah(totalRestoBill)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
 
       {/* TAB 2: SPLIT BILL PER NAMA */}
       {activeTab === 'splitbill' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-5 space-y-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
               <h2 className="text-base font-bold text-slate-900">
                 Rekap Tagihan per Karyawan (Split Bill)
               </h2>
               <p className="text-xs text-slate-500">
-                Centang kotak saat anggota sudah mentransfer atau membayar ke PIC.
+                Pantau pembayaran masing-masing pemesan dan catat pembayaran (Cash / Transfer).
               </p>
             </div>
 
@@ -966,147 +1101,385 @@ export default function EventAdminPage() {
                 placeholder="Cari nama karyawan..."
                 value={searchName}
                 onChange={(e) => setSearchName(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
 
+          {/* Filter Pills (Semua, Belum Bayar, Lunas) */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setPaymentFilter('all')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 border ${
+                paymentFilter === 'all'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+              }`}
+            >
+              <span>Semua</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                paymentFilter === 'all' ? 'bg-slate-700 text-slate-100' : 'bg-slate-200 text-slate-600'
+              }`}>
+                {orders.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPaymentFilter('unpaid')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 border ${
+                paymentFilter === 'unpaid'
+                  ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                  : 'bg-amber-50/70 text-amber-800 border-amber-200/80 hover:bg-amber-100'
+              }`}
+            >
+              <span>Belum Bayar</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                paymentFilter === 'unpaid' ? 'bg-amber-700 text-amber-100' : 'bg-amber-200 text-amber-800'
+              }`}>
+                {orders.length - paidOrdersCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPaymentFilter('paid')}
+              className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 border ${
+                paymentFilter === 'paid'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-emerald-50/70 text-emerald-800 border-emerald-200/80 hover:bg-emerald-100'
+              }`}
+            >
+              <span>Lunas</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                paymentFilter === 'paid' ? 'bg-emerald-700 text-emerald-100' : 'bg-emerald-200 text-emerald-800'
+              }`}>
+                {paidOrdersCount}
+              </span>
+            </button>
+          </div>
+
           {filteredOrders.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-sm">
-              {searchName ? 'Tidak ditemukan karyawan dengan nama tersebut.' : 'Belum ada pesanan yang masuk.'}
+              {searchName || paymentFilter !== 'all'
+                ? 'Tidak ada pesanan yang sesuai dengan filter atau pencarian.'
+                : 'Belum ada pesanan yang masuk.'}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
-                    <th className="py-3 px-3 w-10 text-center">No</th>
-                    <th className="py-3 px-4">Nama Pemesan</th>
-                    <th className="py-3 px-4">Menu Dipesan</th>
-                    <th className="py-3 px-3 text-right">Subtotal</th>
-                    <th className="py-3 px-3 text-right">PPN</th>
-                    <th className="py-3 px-3 text-right">Bulat</th>
-                    <th className="py-3 px-4 text-right">Total Bayar</th>
-                    <th className="py-3 px-4 text-center">Status Bayar</th>
-                    <th className="py-3 px-3 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredOrders.map((order, idx) => (
-                    <tr
-                      key={order.id}
-                      className={`hover:bg-slate-50 transition ${order.isPaid ? 'bg-emerald-50/40' : ''}`}
-                    >
-                      <td className="py-3 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900 text-sm">
-                        {order.userName}
-                      </td>
-                      <td className="py-3 px-4 max-w-xs">
-                        <div className="space-y-1">
-                          {order.items.map((it, itIdx) => (
-                            <div key={itIdx} className="text-slate-700">
-                              <span className="font-semibold">{it.quantity}x</span> {it.menuItemName}
-                              {it.notes && (
-                                <span className="text-[10px] text-amber-700 italic ml-1">({it.notes})</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-right text-slate-600">{formatRupiah(order.subtotal)}</td>
-                      <td className="py-3 px-3 text-right text-slate-600">+{formatRupiah(order.taxAmount)}</td>
-                      <td className={`py-3 px-3 text-right ${order.roundingAmount < 0 ? 'text-emerald-700 font-semibold' : 'text-slate-600'}`}>
-                        {order.roundingAmount > 0 ? `+${formatRupiah(order.roundingAmount)}` : formatRupiah(order.roundingAmount)}
-                      </td>
-                      <td className="py-3 px-4 text-right font-extrabold text-sm text-slate-900">
-                        {formatRupiah(order.totalAmount)}
-                      </td>
-                      <td className="py-3 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPaymentModal(order)}
-                          className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl font-bold text-xs transition border ${
+            <>
+              {/* Mobile Person Cards View (sm:hidden) */}
+              <div className="sm:hidden space-y-3">
+                {filteredOrders.map((order, idx) => (
+                  <div
+                    key={order.id}
+                    className={`p-4 rounded-2xl border transition space-y-3 ${
+                      order.isPaid
+                        ? 'bg-emerald-50/30 border-emerald-200 shadow-2xs'
+                        : 'bg-white border-slate-200 shadow-xs'
+                    }`}
+                  >
+                    {/* Header: Name + Payment Status Badge */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${
                             order.isPaid
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-2xs'
-                              : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200 hover:border-slate-300'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-700'
                           }`}
-                          title={order.isPaid ? 'Klik untuk membatalkan atau melihat status' : 'Klik untuk mencatat pembayaran'}
                         >
-                          <div className="flex items-center gap-1.5">
-                            {order.isPaid ? (
-                              <>
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <span>Lunas {order.paymentMethod === 'cash' ? '(Cash)' : '(Transfer)'}</span>
-                              </>
-                            ) : (
-                              <>
-                                <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400" />
-                                <span>Belum Bayar</span>
-                              </>
+                          {order.userName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-slate-900 text-sm truncate">
+                            {order.userName}
+                          </h3>
+                          <span className="text-[11px] text-slate-400">
+                            Pesanan #{idx + 1}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 flex items-center gap-1 border ${
+                          order.isPaid
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {order.isPaid ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Lunas ({order.paymentMethod === 'cash' ? 'Cash' : 'TF'})</span>
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Belum Bayar</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Ordered Items List */}
+                    <div className="bg-slate-50/90 rounded-xl p-2.5 border border-slate-100 space-y-1.5 text-xs">
+                      {order.items.map((it, itIdx) => (
+                        <div key={itIdx} className="flex items-start justify-between gap-2 text-slate-700">
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-900">{it.quantity}x</span> {it.menuItemName}
+                            {it.notes && (
+                              <span className="text-[10px] text-amber-700 italic ml-1">
+                                ({it.notes})
+                              </span>
                             )}
                           </div>
+                          <span className="text-slate-600 font-medium shrink-0">
+                            {formatRupiah(it.price * it.quantity)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
 
-                          {order.isPaid && order.paymentMethod === 'cash' && (
-                            <div className="text-[10px] text-emerald-700 font-medium">
-                              {order.changeAmount && order.changeAmount > 0 ? (
-                                <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
+                    {/* Financial details & Total */}
+                    <div className="flex items-end justify-between pt-1 text-xs border-t border-slate-100">
+                      <div className="space-y-0.5 text-slate-500 text-[11px]">
+                        <div>Subtotal: {formatRupiah(order.subtotal)}</div>
+                        {(order.taxAmount > 0 || order.roundingAmount !== 0) && (
+                          <div>
+                            {order.taxAmount > 0 && `PPN: +${formatRupiah(order.taxAmount)}`}
+                            {order.taxAmount > 0 && order.roundingAmount !== 0 && ' • '}
+                            {order.roundingAmount !== 0 && `Bulat: ${order.roundingAmount > 0 ? '+' : ''}${formatRupiah(order.roundingAmount)}`}
+                          </div>
+                        )}
+                        {order.isPaid && order.paymentMethod === 'cash' && (
+                          <div className="text-emerald-700 font-medium">
+                            {order.changeAmount && order.changeAmount > 0
+                              ? `Uang: ${formatRupiah(order.paidAmount || 0)} (Kembali: ${formatRupiah(order.changeAmount)})`
+                              : `Uang Pas: ${formatRupiah(order.paidAmount || order.totalAmount)}`}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] text-slate-400 block font-medium">
+                          Total Tagihan
+                        </span>
+                        <span className="text-base font-extrabold text-emerald-600">
+                          {formatRupiah(order.totalAmount)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Quick Action Footer */}
+                    <div className="grid grid-cols-12 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenPaymentModal(order)}
+                        className={`col-span-7 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border shadow-2xs ${
+                          order.isPaid
+                            ? 'bg-white hover:bg-slate-50 border-emerald-300 text-emerald-800'
+                            : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
+                        }`}
+                      >
+                        {order.isPaid ? (
+                          <>
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Ubah Status</span>
+                          </>
+                        ) : (
+                          <>
+                            <Banknote className="w-3.5 h-3.5" />
+                            <span>Catat Bayar</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => shareIndividualWhatsApp(order)}
+                        className="col-span-3 py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center justify-center gap-1"
+                        title="Kirim rincian tagihan via WhatsApp ke karyawan ini"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" />
+                        <span>WA</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOrder(order.id, order.userName)}
+                        className="col-span-2 py-2 px-2 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 text-xs font-medium transition flex items-center justify-center"
+                        title="Hapus pesanan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Mobile Summary Card */}
+                <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Total Tagihan Karyawan:</span>
+                    <span className="font-extrabold text-emerald-800 text-sm">
+                      {formatRupiah(totalCollectedBills)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/60">
+                    <span className="text-emerald-700 font-medium">
+                      Terkumpul: <strong>{formatRupiah(totalPaidAmount)}</strong>
+                    </span>
+                    <span className="font-bold text-emerald-800">
+                      {paidOrdersCount} / {orders.length} Orang Lunas
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop Table View (hidden sm:block) */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
+                      <th className="py-3 px-3 w-10 text-center">No</th>
+                      <th className="py-3 px-4">Nama Pemesan</th>
+                      <th className="py-3 px-4">Menu Dipesan</th>
+                      <th className="py-3 px-3 text-right">Subtotal</th>
+                      <th className="py-3 px-3 text-right">PPN</th>
+                      <th className="py-3 px-3 text-right">Bulat</th>
+                      <th className="py-3 px-4 text-right">Total Bayar</th>
+                      <th className="py-3 px-4 text-center">Status Bayar</th>
+                      <th className="py-3 px-3 text-center">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredOrders.map((order, idx) => (
+                      <tr
+                        key={order.id}
+                        className={`hover:bg-slate-50 transition ${order.isPaid ? 'bg-emerald-50/40' : ''}`}
+                      >
+                        <td className="py-3 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900 text-sm">
+                          {order.userName}
+                        </td>
+                        <td className="py-3 px-4 max-w-xs">
+                          <div className="space-y-1">
+                            {order.items.map((it, itIdx) => (
+                              <div key={itIdx} className="text-slate-700">
+                                <span className="font-semibold">{it.quantity}x</span> {it.menuItemName}
+                                {it.notes && (
+                                  <span className="text-[10px] text-amber-700 italic ml-1">({it.notes})</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-right text-slate-600">{formatRupiah(order.subtotal)}</td>
+                        <td className="py-3 px-3 text-right text-slate-600">+{formatRupiah(order.taxAmount)}</td>
+                        <td className={`py-3 px-3 text-right ${order.roundingAmount < 0 ? 'text-emerald-700 font-semibold' : 'text-slate-600'}`}>
+                          {order.roundingAmount > 0 ? `+${formatRupiah(order.roundingAmount)}` : formatRupiah(order.roundingAmount)}
+                        </td>
+                        <td className="py-3 px-4 text-right font-extrabold text-sm text-slate-900">
+                          {formatRupiah(order.totalAmount)}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPaymentModal(order)}
+                            className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl font-bold text-xs transition border ${
+                              order.isPaid
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-2xs'
+                                : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200 hover:border-slate-300'
+                            }`}
+                            title={order.isPaid ? 'Klik untuk membatalkan atau melihat status' : 'Klik untuk mencatat pembayaran'}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {order.isPaid ? (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>Lunas {order.paymentMethod === 'cash' ? '(Cash)' : '(Transfer)'}</span>
+                                </>
                               ) : (
-                                <span>Uang Pas</span>
+                                <>
+                                  <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400" />
+                                  <span>Belum Bayar</span>
+                                </>
                               )}
                             </div>
-                          )}
-                        </button>
+
+                            {order.isPaid && order.paymentMethod === 'cash' && (
+                              <div className="text-[10px] text-emerald-700 font-medium">
+                                {order.changeAmount && order.changeAmount > 0 ? (
+                                  <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
+                                ) : (
+                                  <span>Uang Pas</span>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => shareIndividualWhatsApp(order)}
+                              className="text-emerald-600 hover:text-emerald-800 p-1.5 rounded-lg hover:bg-emerald-50 transition"
+                              title="Kirim rincian tagihan via WhatsApp ke karyawan ini"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOrder(order.id, order.userName)}
+                              className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition"
+                              title="Hapus pesanan"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900">
+                      <td colSpan={3} className="py-3 px-4 text-right">TOTAL TAGIHAN:</td>
+                      <td className="py-3 px-3 text-right text-xs">
+                        {formatRupiah(orders.reduce((sum, o) => sum + o.subtotal, 0))}
                       </td>
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteOrder(order.id, order.userName)}
-                          className="text-slate-400 hover:text-red-600 p-1 transition"
-                          title="Hapus pesanan"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <td className="py-3 px-3 text-right text-xs">
+                        {formatRupiah(orders.reduce((sum, o) => sum + o.taxAmount, 0))}
+                      </td>
+                      <td className="py-3 px-3 text-right text-xs">
+                        {formatRupiah(orders.reduce((sum, o) => sum + o.roundingAmount, 0))}
+                      </td>
+                      <td className="py-3 px-4 text-right text-sm text-emerald-600">
+                        {formatRupiah(totalCollectedBills)}
+                      </td>
+                      <td colSpan={2} className="py-3 px-4 text-center text-xs text-slate-600">
+                        {paidOrdersCount} / {orders.length} Orang Lunas
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900">
-                    <td colSpan={3} className="py-3 px-4 text-right">TOTAL TAGIHAN:</td>
-                    <td className="py-3 px-3 text-right text-xs">
-                      {formatRupiah(orders.reduce((sum, o) => sum + o.subtotal, 0))}
-                    </td>
-                    <td className="py-3 px-3 text-right text-xs">
-                      {formatRupiah(orders.reduce((sum, o) => sum + o.taxAmount, 0))}
-                    </td>
-                    <td className="py-3 px-3 text-right text-xs">
-                      {formatRupiah(orders.reduce((sum, o) => sum + o.roundingAmount, 0))}
-                    </td>
-                    <td className="py-3 px-4 text-right text-sm text-emerald-600">
-                      {formatRupiah(totalCollectedBills)}
-                    </td>
-                    <td colSpan={2} className="py-3 px-4 text-center text-xs text-slate-600">
-                      {paidOrdersCount} / {orders.length} Orang Lunas
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
 
       {/* TAB 3: KELOLA MENU */}
       {activeTab === 'menu' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-5">
           <div className="pb-3 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-base font-bold text-slate-900">Kelola Menu Makanan & Minuman</h2>
+              <h2 className="text-base font-bold text-slate-900">Kelola Menu Restoran</h2>
               <p className="text-xs text-slate-500">
-                Tambah, ubah nama/harga/kategori, atau hapus menu restoran untuk acara ini.
+                Tambah menu baru, ubah harga/kategori, atau hapus menu restoran untuk acara ini.
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full shrink-0">
+            <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full self-start sm:self-auto shrink-0">
               Total: {event.menuItems.length} Menu
             </span>
           </div>
@@ -1115,14 +1488,14 @@ export default function EventAdminPage() {
           <form
             id="menu-item-form"
             onSubmit={handleSaveMenuItem}
-            className={`p-4 rounded-xl border transition space-y-3 ${
+            className={`p-4 rounded-2xl border transition space-y-3.5 ${
               editingItemId
-                ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-300/50'
-                : 'bg-slate-50 border-slate-200'
+                ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-300/40'
+                : 'bg-slate-50/80 border-slate-200'
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="block text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                 {editingItemId ? (
                   <>
                     <Edit3 className="w-4 h-4 text-amber-600" />
@@ -1140,140 +1513,192 @@ export default function EventAdminPage() {
                 <button
                   type="button"
                   onClick={handleCancelEditMenuItem}
-                  className="text-xs text-slate-500 hover:text-slate-700 underline font-medium"
+                  className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
                 >
                   Batal Edit
                 </button>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-              <div className="sm:col-span-5">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Nama Menu</label>
+            <div className="space-y-3">
+              {/* Nama Menu */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Nama Menu
+                </label>
                 <input
                   type="text"
-                  placeholder="Contoh: Soto Ayam Campur"
+                  placeholder="Contoh: Nasi Goreng Spesial"
                   value={newMenuName}
                   onChange={(e) => setNewMenuName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
                 />
               </div>
 
-              <div className="sm:col-span-3">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Harga (Rp)</label>
-                <input
-                  type="number"
-                  placeholder="Contoh: 15000"
-                  value={newMenuPrice}
-                  onChange={(e) => setNewMenuPrice(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
-                />
-              </div>
+              {/* Grid: Harga & Kategori & Submit Button */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                <div className="sm:col-span-5">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Harga Satuan (Rp)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="Contoh: 20000"
+                    value={newMenuPrice}
+                    onChange={(e) => setNewMenuPrice(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
+                  />
+                </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Kategori</label>
-                <select
-                  value={newMenuCategory}
-                  onChange={(e) => setNewMenuCategory(e.target.value)}
-                  className="w-full px-2 py-2 rounded-lg border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500"
-                >
-                  <option value="Makanan">Makanan</option>
-                  <option value="Minuman">Minuman</option>
-                  <option value="Cemilan">Cemilan</option>
-                  <option value="Paket">Paket</option>
-                  <option value="Lainnya">Lainnya</option>
-                </select>
-              </div>
+                <div className="sm:col-span-4">
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    Kategori
+                  </label>
+                  <select
+                    value={newMenuCategory}
+                    onChange={(e) => setNewMenuCategory(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
+                  >
+                    <option value="Makanan">Makanan</option>
+                    <option value="Minuman">Minuman</option>
+                    <option value="Cemilan">Cemilan</option>
+                    <option value="Paket">Paket</option>
+                    <option value="Lainnya">Lainnya</option>
+                  </select>
+                </div>
 
-              <div className="sm:col-span-2 flex items-end gap-1.5">
-                <button
-                  type="submit"
-                  disabled={!newMenuName.trim() || !newMenuPrice}
-                  className={`w-full py-2 px-3 rounded-lg disabled:opacity-40 text-white text-xs font-bold transition flex items-center justify-center gap-1 shadow-xs ${
-                    editingItemId
-                      ? 'bg-amber-600 hover:bg-amber-700'
-                      : 'bg-orange-600 hover:bg-orange-700'
-                  }`}
-                >
-                  {editingItemId ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      Simpan
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-3.5 h-3.5" />
-                      Tambah
-                    </>
-                  )}
-                </button>
+                <div className="sm:col-span-3 flex items-end">
+                  <button
+                    type="submit"
+                    disabled={!newMenuName.trim() || !newMenuPrice}
+                    className={`w-full py-2.5 px-3 rounded-xl disabled:opacity-40 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs ${
+                      editingItemId
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-orange-600 hover:bg-orange-700'
+                    }`}
+                  >
+                    {editingItemId ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Simpan</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Tambah</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </form>
 
-          {/* Existing Menu Items List */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700">
-                Daftar Menu ({event.menuItems.length}):
-              </span>
-              <p className="text-[11px] text-slate-400">
-                Klik ikon pensil ✏️ untuk mengedit atau tempat sampah 🗑️ untuk menghapus menu.
-              </p>
-            </div>
+          {/* Search & Category Filter Section */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              {/* Search Menu Input */}
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Cari menu..."
+                  value={searchMenuQuery}
+                  onChange={(e) => setSearchMenuQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {event.menuItems.map((item) => {
-                const isItemBeingEdited = editingItemId === item.id;
-                return (
-                  <div
-                    key={item.id}
-                    className={`p-3.5 rounded-xl border transition flex items-center justify-between text-xs ${
-                      isItemBeingEdited
-                        ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400'
-                        : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 shadow-2xs'
+              {/* Category Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+                {menuCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedMenuCategory(cat)}
+                    className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition border ${
+                      selectedMenuCategory === cat
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    <div className="pr-2 overflow-hidden">
-                      <span className="font-bold text-slate-900 block truncate text-sm">
-                        {item.name}
-                      </span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/70 text-slate-600 font-medium">
-                          {item.category || 'Makanan'}
-                        </span>
-                        <span className="font-extrabold text-orange-600">
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Menu Items Compact List */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-800">
+                Daftar Menu Tersedia ({filteredMenuItems.length} dari {event.menuItems.length}):
+              </span>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                Klik pensil ✏️ untuk edit, sampah 🗑️ untuk hapus.
+              </span>
+            </div>
+
+            {filteredMenuItems.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 text-sm">
+                Tidak ada menu yang sesuai dengan filter pencarian atau kategori.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {filteredMenuItems.map((item) => {
+                  const isItemBeingEdited = editingItemId === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3 rounded-xl border transition flex items-center justify-between gap-2.5 ${
+                        isItemBeingEdited
+                          ? 'border-amber-400 bg-amber-50 ring-1 ring-amber-400 shadow-xs'
+                          : 'border-slate-200 bg-white hover:border-slate-300 shadow-2xs'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">
+                            {item.category || 'Makanan'}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-slate-900 text-sm truncate leading-snug">
+                          {item.name}
+                        </h4>
+                        <span className="font-extrabold text-orange-600 text-xs">
                           {formatRupiah(item.price)}
                         </span>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEditMenuItem(item)}
-                        className={`p-1.5 rounded-lg border transition ${
-                          isItemBeingEdited
-                            ? 'bg-amber-200 border-amber-400 text-amber-900'
-                            : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-orange-600'
-                        }`}
-                        title="Edit nama atau harga menu ini"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMenuItem(item.id, item.name)}
-                        className="p-1.5 rounded-lg border bg-white hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 transition"
-                        title="Hapus menu ini"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditMenuItem(item)}
+                          className={`p-2 rounded-xl border transition ${
+                            isItemBeingEdited
+                              ? 'bg-amber-200 border-amber-400 text-amber-900'
+                              : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-orange-600'
+                          }`}
+                          title="Edit nama atau harga menu ini"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMenuItem(item.id, item.name)}
+                          className="p-2 rounded-xl border bg-slate-50 hover:bg-red-50 border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 transition"
+                          title="Hapus menu ini"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
