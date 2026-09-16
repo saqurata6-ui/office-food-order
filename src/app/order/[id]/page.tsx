@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
-import { formatRupiah, calculateOrder } from '@/lib/calculator';
+import { formatRupiah, calculateOrder, normalizeName } from '@/lib/calculator';
 
 export default function OrderPage() {
   const params = useParams();
@@ -103,12 +103,9 @@ export default function OrderPage() {
 
   // Check if typed name matches an existing order (for suggestion prompt)
   const matchingOrderForTypedName = useMemo(() => {
-    if (!userName.trim() || existingOrder) return null;
-    return (
-      orders.find(
-        (o) => o.userName.trim().toLowerCase() === userName.trim().toLowerCase()
-      ) || null
-    );
+    const clean = normalizeName(userName);
+    if (!clean || existingOrder) return null;
+    return orders.find((o) => normalizeName(o.userName) === clean) || null;
   }, [userName, existingOrder, orders]);
 
   // Handler to start editing an existing order
@@ -245,9 +242,31 @@ export default function OrderPage() {
     e.preventDefault();
     if (!event || event.isLocked) return;
 
-    if (!userName.trim()) {
+    const cleanName = normalizeName(userName);
+    if (!cleanName) {
       alert('Harap masukkan nama Anda terlebih dahulu.');
       return;
+    }
+
+    // Validasi nama pemesan tidak boleh sama (mencegah typo spasi / kapitalisasi)
+    if (!existingOrder) {
+      const duplicate = orders.find((o) => normalizeName(o.userName) === cleanName);
+      if (duplicate) {
+        alert(
+          `Nama "${userName.trim()}" sudah digunakan dalam pesanan (${duplicate.userName}).\n\nJika ini pesanan Anda, silakan klik nama Anda pada daftar pesanan di atas untuk mengubah pesanan, atau tambahkan nama pembeda (misal: divisi / inisial).`
+        );
+        return;
+      }
+    } else {
+      const duplicateOther = orders.find(
+        (o) => o.id !== existingOrder.id && normalizeName(o.userName) === cleanName
+      );
+      if (duplicateOther) {
+        alert(
+          `Nama "${userName.trim()}" sudah digunakan oleh orang lain (${duplicateOther.userName}). Harap gunakan nama Anda sendiri atau tambahkan pembeda.`
+        );
+        return;
+      }
     }
 
     if (orderItemsList.length === 0) {

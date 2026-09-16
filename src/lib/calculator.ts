@@ -12,6 +12,17 @@ export function formatRupiah(amount: number): string {
   return isNegative ? `-${formatted}` : formatted;
 }
 
+/**
+ * Normalisasi nama untuk mencegah duplikasi (menghapus spasi berlebih, spasi di awal/akhir, dan case-insensitive)
+ * Contoh: " Budi  Santoso " -> "budi santoso", "budi " -> "budi", "  budi" -> "budi"
+ */
+export function normalizeName(name: string): string {
+  return (name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
 export function calculateOrder(
   items: OrderItem[],
   taxConfig: TaxConfig

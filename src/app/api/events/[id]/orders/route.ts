@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { calculateOrder } from '@/lib/calculator';
+import { calculateOrder, normalizeName } from '@/lib/calculator';
 import { UserOrder, OrderItem } from '@/types';
 import { nanoid } from 'nanoid';
 
@@ -49,8 +49,28 @@ export async function POST(
     const body = await req.json();
     const { userName, items, orderId, includeTax } = body;
 
-    if (!userName || !userName.trim()) {
+    const cleanNormalizedName = normalizeName(userName);
+    if (!cleanNormalizedName) {
       return NextResponse.json({ success: false, message: 'Nama pemesan wajib diisi' }, { status: 400 });
+    }
+
+    // Validasi nama pemesan tidak boleh sama (mencegah typo spasi / kapitalisasi)
+    const existingOrders = await db.getOrders(event.id);
+    const duplicateOrder = existingOrders.find((o) => {
+      if (orderId && o.id === orderId) {
+        return false;
+      }
+      return normalizeName(o.userName) === cleanNormalizedName;
+    });
+
+    if (duplicateOrder) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Nama "${userName.trim()}" sudah ada di daftar pesanan (${duplicateOrder.userName}). Jika ini pesanan Anda, silakan pilih nama Anda untuk mengedit, atau tambahkan nama pembeda (misal: divisi / inisial).`,
+        },
+        { status: 409 }
+      );
     }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
