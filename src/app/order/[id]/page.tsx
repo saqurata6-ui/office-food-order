@@ -25,6 +25,9 @@ import {
   RotateCcw,
   Sparkles,
   Calculator,
+  X,
+  Eye,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
@@ -47,6 +50,7 @@ export default function OrderPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [existingOrder, setExistingOrder] = useState<UserOrder | null>(null);
+  const [previewOrder, setPreviewOrder] = useState<UserOrder | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showTaxEstimate, setShowTaxEstimate] = useState(false);
 
@@ -97,48 +101,18 @@ export default function OrderPage() {
     }
   }, [eventId]);
 
-  // Load saved user name from localStorage if available
-  useEffect(() => {
-    try {
-      const savedName = localStorage.getItem('makan_kantor_user_name');
-      if (savedName) {
-        setUserName(savedName);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
-
-  // When userName changes or orders reload, check if this user already placed an order
-  useEffect(() => {
-    if (!userName.trim() || !orders.length) {
-      setExistingOrder(null);
-      return;
-    }
-
-    const found = orders.find(
-      (o) => o.userName.trim().toLowerCase() === userName.trim().toLowerCase()
+  // Check if typed name matches an existing order (for suggestion prompt)
+  const matchingOrderForTypedName = useMemo(() => {
+    if (!userName.trim() || existingOrder) return null;
+    return (
+      orders.find(
+        (o) => o.userName.trim().toLowerCase() === userName.trim().toLowerCase()
+      ) || null
     );
+  }, [userName, existingOrder, orders]);
 
-    if (found) {
-      setExistingOrder(found);
-      setShowTaxEstimate(found.taxAmount > 0);
-      // Pre-fill selected items from existing order
-      const map: Record<string, { quantity: number; notes: string }> = {};
-      found.items.forEach((it) => {
-        map[it.menuItemId] = {
-          quantity: it.quantity,
-          notes: it.notes || '',
-        };
-      });
-      setSelectedItems(map);
-    } else {
-      setExistingOrder(null);
-    }
-  }, [userName, orders]);
-
-  // Handler to quickly select a user to edit their order
-  const handleSelectUserToEdit = (user: UserOrder) => {
+  // Handler to start editing an existing order
+  const handleStartEdit = (user: UserOrder) => {
     setUserName(user.userName);
     setExistingOrder(user);
     setShowTaxEstimate(user.taxAmount > 0);
@@ -150,6 +124,7 @@ export default function OrderPage() {
       };
     });
     setSelectedItems(map);
+    setPreviewOrder(null);
   };
 
   // Reset to empty / new order
@@ -500,24 +475,47 @@ export default function OrderPage() {
           />
         </div>
 
+        {/* Prompt if typed name matches an existing order */}
+        {matchingOrderForTypedName && (
+          <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between gap-2 animate-in fade-in duration-150">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="truncate">
+                Nama <strong>{matchingOrderForTypedName.userName}</strong> sudah ada di daftar pesanan.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPreviewOrder(matchingOrderForTypedName)}
+              className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] shrink-0 transition shadow-2xs flex items-center gap-1"
+            >
+              <Eye className="w-3 h-3" />
+              Lihat & Edit
+            </button>
+          </div>
+        )}
+
         {/* Quick select previous order pills */}
-        {orders.length > 0 && !event.isLocked && (
+        {orders.length > 0 && (
           <div className="pt-2 border-t border-slate-100">
             <div className="flex items-center gap-1.5 mb-2">
-              <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+              <Eye className="w-3.5 h-3.5 text-blue-600" />
               <span className="text-[11px] font-bold text-slate-700">
-                Sudah pernah pesan? Klik namamu untuk ubah menu:
+                {event.isLocked
+                  ? 'Daftar pesanan (klik nama untuk lihat rincian menu):'
+                  : 'Sudah pernah pesan? Klik nama untuk lihat & ubah menu:'}
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
               {orders.map((ord) => {
                 const isCurrentActive =
+                  existingOrder?.id === ord.id ||
                   ord.userName.trim().toLowerCase() === userName.trim().toLowerCase();
                 return (
                   <button
                     key={ord.id}
                     type="button"
-                    onClick={() => handleSelectUserToEdit(ord)}
+                    onClick={() => setPreviewOrder(ord)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 border ${
                       isCurrentActive
                         ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
@@ -629,9 +627,10 @@ export default function OrderPage() {
       </div>
 
       {/* Menu Items List */}
-      <div className="space-y-3">
+      {/* Menu Items List - Option 1: Compact List */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs divide-y divide-slate-100 overflow-hidden">
         {filteredMenuItems.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-xs text-slate-400">
+          <div className="p-8 text-center text-xs text-slate-400">
             Tidak ada menu di kategori ini.
           </div>
         ) : (
@@ -646,80 +645,88 @@ export default function OrderPage() {
             return (
               <div
                 key={item.id}
-                className={`bg-white rounded-2xl border p-4 transition ${
+                className={`p-3 sm:px-4 sm:py-3 transition-colors ${
                   isSelected
-                    ? 'border-orange-500 ring-1 ring-orange-500 shadow-sm'
-                    : 'border-slate-200 hover:border-slate-300'
+                    ? 'bg-orange-50/50 border-l-4 border-l-orange-500 pl-2.5 sm:pl-3.5'
+                    : 'hover:bg-slate-50/70'
                 }`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 pr-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-sm text-slate-900 leading-snug">{item.name}</h3>
+                <div className="flex items-center justify-between gap-3">
+                  {/* Left: Info Menu */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="font-bold text-xs sm:text-sm text-slate-900 leading-tight">
+                        {item.name}
+                      </h3>
                       {item.category && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                        <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
                           {item.category}
                         </span>
                       )}
                     </div>
                     {item.description && (
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{item.description}</p>
+                      <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                        {item.description}
+                      </p>
                     )}
-                    
-                    <div className="flex items-baseline gap-2 mt-2">
-                      <span className="text-sm font-extrabold text-orange-600">
+
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-xs sm:text-sm font-extrabold text-orange-600">
                         {showTaxEstimate && event.taxConfig.useTax
                           ? formatRupiah(priceWithTax)
                           : formatRupiah(item.price)}
                       </span>
                       {showTaxEstimate && event.taxConfig.useTax && (
                         <span className="text-[10px] text-slate-400 font-medium">
-                          (Asli: {formatRupiah(item.price)} + PPN {event.taxConfig.taxPercent}%)
+                          (Asli: {formatRupiah(item.price)})
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Quantity Counter Buttons */}
-                  <div className="flex items-center gap-1.5 shrink-0 bg-slate-50 border border-slate-200 rounded-xl p-1">
+                  {/* Right: Compact Counter */}
+                  <div className="flex items-center gap-1 shrink-0 bg-slate-100/90 border border-slate-200 rounded-xl p-0.5 sm:p-1">
                     <button
                       type="button"
                       onClick={() => handleItemQty(item, -1)}
                       disabled={event.isLocked || current.quantity === 0}
-                      className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 disabled:opacity-30 text-slate-700 flex items-center justify-center shadow-xs transition"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 font-bold flex items-center justify-center shadow-xs transition"
+                      aria-label="Kurangi porsi"
                     >
-                      <Minus className="w-3.5 h-3.5" />
+                      <Minus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     </button>
-                    <span className="w-7 text-center font-bold text-sm text-slate-900">
+                    <span className="w-6 sm:w-7 text-center font-extrabold text-xs sm:text-sm text-slate-900">
                       {current.quantity}
                     </span>
                     <button
                       type="button"
                       onClick={() => handleItemQty(item, 1)}
                       disabled={event.isLocked}
-                      className="w-8 h-8 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-30 text-white flex items-center justify-center shadow-xs transition"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-orange-600 hover:bg-orange-700 disabled:opacity-30 text-white font-bold flex items-center justify-center shadow-xs transition"
+                      aria-label="Tambah porsi"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                {/* Notes Input (if item is selected) */}
+                {/* Compact Note input when quantity > 0 */}
                 {isSelected && !event.isLocked && (
-                  <div className="mt-3 pt-3 border-t border-slate-100">
+                  <div className="mt-2 pt-2 border-t border-dashed border-orange-200/80 flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                     <input
                       type="text"
-                      placeholder="Catatan khusus (misal: pedas sedang, es sedikit, sambal dipisah)..."
+                      placeholder="Catatan khusus (misal: pedas sedang, es sedikit, kuah dipisah)..."
                       value={current.notes}
                       onChange={(e) => handleItemNote(item.id, e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs bg-slate-50 focus:bg-white text-slate-900 placeholder:text-slate-400 focus:ring-1 focus:ring-orange-500"
+                      className="flex-1 text-xs py-1 px-2.5 rounded-lg bg-white border border-orange-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-500"
                     />
                   </div>
                 )}
 
-                {/* Notes Readonly (if locked and note exists) */}
+                {/* Note readonly when locked */}
                 {isSelected && event.isLocked && current.notes && (
-                  <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                  <div className="mt-1.5 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
                     Catatan: <span className="italic text-slate-700 font-medium">{current.notes}</span>
                   </div>
                 )}
@@ -839,6 +846,138 @@ export default function OrderPage() {
           <div className="flex-1 text-xs">
             <strong className="block text-sm font-bold">Pesanan Berhasil Disimpan!</strong>
             <span>Total tagihanmu: <strong>{formatRupiah(calculation.totalAmount)}</strong>. Kamu bisa mengedit pesanan ini kapan saja sebelum PIC mengunci pesanan.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Preview Pesanan Saat Chip Dipilih */}
+      {previewOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-150">
+            {/* Header Modal */}
+            <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Preview Menu Pilihan
+                  </span>
+                  <h3 className="font-extrabold text-slate-900 text-base leading-tight">
+                    {previewOrder.userName}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewOrder(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition"
+                aria-label="Tutup preview"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body: List Menu */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span>Daftar Menu</span>
+                <span>{previewOrder.items.reduce((s, i) => s + i.quantity, 0)} Porsi</span>
+              </div>
+
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
+                {previewOrder.items.map((it, idx) => (
+                  <div key={idx} className="p-3 text-xs flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-800 leading-snug">
+                        <span className="text-orange-600 mr-1.5 font-extrabold">{it.quantity}x</span>
+                        {it.menuItemName}
+                      </div>
+                      {it.notes && (
+                        <p className="text-[11px] text-slate-500 italic mt-0.5">
+                          Catatan: {it.notes}
+                        </p>
+                      )}
+                      <div className="text-[10px] text-slate-400 mt-0.5">
+                        @ {formatRupiah(it.price)}
+                      </div>
+                    </div>
+                    <div className="font-bold text-slate-900 shrink-0">
+                      {formatRupiah(it.price * it.quantity)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Rincian Finansial */}
+              <div className="p-3.5 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-600 border border-slate-100">
+                <div className="flex justify-between">
+                  <span>Subtotal Menu:</span>
+                  <span className="font-medium text-slate-800">
+                    {formatRupiah(previewOrder.subtotal)}
+                  </span>
+                </div>
+                {previewOrder.taxAmount > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>PPN ({event.taxConfig.taxPercent}%):</span>
+                    <span className="font-medium text-slate-800">+{formatRupiah(previewOrder.taxAmount)}</span>
+                  </div>
+                )}
+                {previewOrder.serviceAmount > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>Service Charge:</span>
+                    <span className="font-medium text-slate-800">+{formatRupiah(previewOrder.serviceAmount)}</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-slate-200 flex justify-between font-extrabold text-sm text-slate-900">
+                  <span>Total Tagihan:</span>
+                  <span className="text-orange-600 text-base">{formatRupiah(previewOrder.totalAmount)}</span>
+                </div>
+              </div>
+
+              {/* Info Pembayaran */}
+              <div className="flex items-center justify-between text-xs px-1">
+                <span className="text-slate-500 font-medium">Status Bayar:</span>
+                {previewOrder.isPaid ? (
+                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                    <Check className="w-3 h-3" /> Lunas ({previewOrder.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                    Belum Bayar
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="p-4 bg-white border-t border-slate-100 flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPreviewOrder(null)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold transition"
+              >
+                Tutup
+              </button>
+              {!event.isLocked ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleStartEdit(previewOrder);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shadow-orange-600/20"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit Pesanan Ini
+                </button>
+              ) : (
+                <div className="text-[11px] text-slate-400 font-medium flex items-center gap-1 py-1">
+                  <Lock className="w-3.5 h-3.5" /> Terkunci
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
