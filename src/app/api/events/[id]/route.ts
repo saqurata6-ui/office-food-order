@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 export async function GET(
@@ -7,11 +7,19 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const event = db.getEvent(id);
+    const cleanId = decodeURIComponent(id || '').trim();
+    const event = db.getEvent(cleanId);
 
     if (!event) {
+      const allEvents = db.getAllEvents().map((e) => ({
+        id: e.id,
+        title: e.title,
+        date: e.date,
+        restaurantName: e.restaurantName,
+        adminPin: e.adminPin,
+      }));
       return NextResponse.json(
-        { success: false, message: 'Acara tidak ditemukan' },
+        { success: false, message: 'Acara tidak ditemukan', availableEvents: allEvents },
         { status: 404 }
       );
     }

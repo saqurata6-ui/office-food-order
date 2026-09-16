@@ -67,13 +67,46 @@ export default function EventAdminPage() {
   const [newMenuPrice, setNewMenuPrice] = useState('');
   const [newMenuCategory, setNewMenuCategory] = useState('Makanan');
 
+  const [availableEvents, setAvailableEvents] = useState<any[]>([]);
+
   const fetchEventAndOrders = async (pinToUse?: string) => {
+    if (!eventId || eventId === 'undefined') return;
     try {
       const pinParam = pinToUse || adminPin;
-      const res = await fetch(`/api/events/${eventId}${pinParam ? `?pin=${pinParam}` : ''}`);
+      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}${pinParam ? `?pin=${pinParam}` : ''}`);
       const json = await res.json();
 
       if (!json.success || !json.data) {
+        // Cek apakah data acara tersimpan di localStorage browser ini untuk auto-restore
+        try {
+          const localSaved = localStorage.getItem(`makan_kantor_event_${eventId}`);
+          const historyRaw = localStorage.getItem('makan_kantor_history');
+          let foundInHistory = null;
+          if (historyRaw) {
+            const hList = JSON.parse(historyRaw);
+            foundInHistory = hList.find((h: any) => h.id === eventId || h.id?.toLowerCase() === eventId?.toLowerCase());
+          }
+
+          if (localSaved) {
+            const restored = JSON.parse(localSaved);
+            // Sinkronkan kembali ke database server
+            await fetch('/api/events', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(restored),
+            });
+            setEvent(restored);
+            setIsPinAuthenticated(true);
+            setError('');
+            return;
+          }
+        } catch (localErr) {
+          console.error('Error in local recovery:', localErr);
+        }
+
+        if (json.availableEvents) {
+          setAvailableEvents(json.availableEvents);
+        }
         setError(json.message || 'Acara tidak ditemukan.');
         return;
       }
@@ -93,7 +126,7 @@ export default function EventAdminPage() {
   };
 
   useEffect(() => {
-    if (eventId) {
+    if (eventId && eventId !== 'undefined') {
       fetchEventAndOrders();
     }
   }, [eventId]);
@@ -290,12 +323,56 @@ export default function EventAdminPage() {
 
   if (error || !event) {
     return (
-      <div className="max-w-md mx-auto my-12 p-6 bg-white rounded-2xl border border-slate-200 text-center space-y-4">
+      <div className="max-w-md mx-auto my-12 p-6 bg-white rounded-2xl border border-slate-200 text-center space-y-4 shadow-sm">
         <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
           <AlertTriangle className="w-6 h-6" />
         </div>
-        <h2 className="text-lg font-bold text-slate-800">Acara Tidak Ditemukan</h2>
-        <p className="text-xs text-slate-600">{error || 'Periksa kembali URL Anda.'}</p>
+        <h2 className="text-lg font-bold text-slate-900">Acara Tidak Ditemukan</h2>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          {error || 'Periksa kembali ID acara atau link yang Anda buka.'}
+        </p>
+
+        {availableEvents.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-100 text-left space-y-2">
+            <span className="block text-xs font-bold text-slate-800">
+              Acara yang Tersedia di Sistem:
+            </span>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {availableEvents.map((ev) => (
+                <Link
+                  key={ev.id}
+                  href={`/event/${ev.id}/admin?pin=${ev.adminPin || ''}`}
+                  className="p-2.5 rounded-xl bg-slate-50 hover:bg-orange-50 border border-slate-200 text-xs font-semibold text-slate-800 transition flex items-center justify-between group"
+                >
+                  <div className="overflow-hidden pr-2">
+                    <span className="block font-bold text-slate-900 truncate group-hover:text-orange-600">
+                      {ev.title}
+                    </span>
+                    <span className="block text-[11px] text-slate-500">
+                      {ev.restaurantName} • {ev.date}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-bold text-orange-600 shrink-0">Buka ➔</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="pt-3 flex items-center justify-center gap-2">
+          <Link
+            href="/create"
+            className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs"
+          >
+            + Buat Acara Baru
+          </Link>
+          <Link
+            href="/"
+            className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium transition"
+          >
+            Kembali ke Beranda
+          </Link>
+        </div>
       </div>
     );
   }
