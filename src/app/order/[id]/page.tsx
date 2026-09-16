@@ -24,6 +24,7 @@ import {
   Edit3,
   RotateCcw,
   Sparkles,
+  Calculator,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder } from '@/types';
@@ -47,6 +48,7 @@ export default function OrderPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [existingOrder, setExistingOrder] = useState<UserOrder | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showTaxEstimate, setShowTaxEstimate] = useState(false);
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -561,22 +563,48 @@ export default function OrderPage() {
         )}
       </div>
 
-      {/* Menu Categories Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-none">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setActiveCategory(cat)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition ${
-              activeCategory === cat
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* Tax Estimate Toggle & Categories Header */}
+      <div className="space-y-2.5 mb-4">
+        {event.taxConfig.useTax && (
+          <div className="flex items-center justify-between bg-orange-50/60 border border-orange-200/80 rounded-xl px-3.5 py-2">
+            <label
+              htmlFor="tax-toggle"
+              className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-800"
+            >
+              <input
+                id="tax-toggle"
+                type="checkbox"
+                checked={showTaxEstimate}
+                onChange={(e) => setShowTaxEstimate(e.target.checked)}
+                className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300 cursor-pointer accent-orange-600"
+              />
+              <span className="font-semibold">
+                Tampilkan estimasi harga sudah termasuk PPN ({event.taxConfig.taxPercent}%)
+              </span>
+            </label>
+            <span className="text-[10px] text-orange-700 bg-orange-100/80 px-2 py-0.5 rounded-md font-bold hidden sm:inline-block">
+              Simulasi Harga
+            </span>
+          </div>
+        )}
+
+        {/* Menu Categories Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition ${
+                activeCategory === cat
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Menu Items List */}
@@ -589,6 +617,10 @@ export default function OrderPage() {
           filteredMenuItems.map((item) => {
             const current = selectedItems[item.id] || { quantity: 0, notes: '' };
             const isSelected = current.quantity > 0;
+
+            // Hitung estimasi harga + PPN jika fitur dicentang
+            const taxMultiplier = event.taxConfig.useTax ? 1 + event.taxConfig.taxPercent / 100 : 1;
+            const priceWithTax = Math.round(item.price * taxMultiplier);
 
             return (
               <div
@@ -612,9 +644,19 @@ export default function OrderPage() {
                     {item.description && (
                       <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{item.description}</p>
                     )}
-                    <span className="block text-sm font-extrabold text-orange-600 mt-2">
-                      {formatRupiah(item.price)}
-                    </span>
+                    
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className="text-sm font-extrabold text-orange-600">
+                        {showTaxEstimate && event.taxConfig.useTax
+                          ? formatRupiah(priceWithTax)
+                          : formatRupiah(item.price)}
+                      </span>
+                      {showTaxEstimate && event.taxConfig.useTax && (
+                        <span className="text-[10px] text-slate-400 font-medium">
+                          (Asli: {formatRupiah(item.price)} + PPN {event.taxConfig.taxPercent}%)
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Quantity Counter Buttons */}
