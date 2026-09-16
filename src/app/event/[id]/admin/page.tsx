@@ -28,6 +28,7 @@ import {
   MessageCircle,
   Edit2,
   Edit3,
+  ArrowUpDown,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem } from '@/types';
 import { formatRupiah } from '@/lib/calculator';
@@ -59,6 +60,7 @@ export default function EventAdminPage() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<'resto' | 'splitbill' | 'menu'>('resto');
   const [searchName, setSearchName] = useState('');
+  const [restoSortBy, setRestoSortBy] = useState<'first_added' | 'latest_added' | 'qty_desc' | 'name_asc'>('first_added');
 
   // Copy / Share Feedback
   const [copiedLink, setCopiedLink] = useState(false);
@@ -330,8 +332,8 @@ export default function EventAdminPage() {
 
   // Grouped Resto Orders
   const groupedOrders = useMemo(() => {
-    return getGroupedRestaurantOrders(orders);
-  }, [orders]);
+    return getGroupedRestaurantOrders(orders, restoSortBy);
+  }, [orders, restoSortBy]);
 
   // Statistics
   const totalPortions = useMemo(() => {
@@ -748,7 +750,7 @@ export default function EventAdminPage() {
       {/* TAB 1: REKAP RESTORAN (KITCHEN VIEW) */}
       {activeTab === 'resto' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden space-y-4 p-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
               <h2 className="text-base font-bold text-slate-900">
                 Daftar Ringkasan Pesanan untuk Restoran
@@ -757,9 +759,28 @@ export default function EventAdminPage() {
                 Gunakan daftar ini saat memesan atau menyerahkan list ke pelayan/kasir resto.
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg self-start sm:self-auto">
-              Total {totalPortions} Porsi Makanan & Minuman
-            </span>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Urutan selector */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-xl text-xs">
+                <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+                <span className="text-[11px] font-semibold text-slate-600">Urutkan:</span>
+                <select
+                  value={restoSortBy}
+                  onChange={(e) => setRestoSortBy(e.target.value as any)}
+                  className="bg-transparent text-xs font-bold text-slate-800 focus:outline-hidden cursor-pointer"
+                >
+                  <option value="first_added">Waktu Masuk Pertama (Awal Pesan)</option>
+                  <option value="latest_added">Waktu Tambah Terbaru</option>
+                  <option value="qty_desc">Porsi Terbanyak (Best Seller)</option>
+                  <option value="name_asc">Nama Menu (A - Z)</option>
+                </select>
+              </div>
+
+              <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                Total {totalPortions} Porsi
+              </span>
+            </div>
           </div>
 
           {groupedOrders.length === 0 ? (

@@ -1,10 +1,13 @@
-﻿import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { EventData, UserOrder } from '@/types';
 import { formatRupiah } from './calculator';
 
-export function getGroupedRestaurantOrders(orders: UserOrder[]) {
+export function getGroupedRestaurantOrders(
+  orders: UserOrder[],
+  sortBy: 'first_added' | 'latest_added' | 'qty_desc' | 'name_asc' = 'first_added'
+) {
   const menuMap: Record<
     string,
     {
@@ -13,10 +16,13 @@ export function getGroupedRestaurantOrders(orders: UserOrder[]) {
       totalQty: number;
       price: number;
       notes: string[];
+      firstAddedTime: number;
+      latestAddedTime: number;
     }
   > = {};
 
   orders.forEach((order) => {
+    const orderTime = new Date(order.createdAt || order.updatedAt || Date.now()).getTime();
     order.items.forEach((item) => {
       if (!menuMap[item.menuItemId]) {
         menuMap[item.menuItemId] = {
@@ -25,7 +31,18 @@ export function getGroupedRestaurantOrders(orders: UserOrder[]) {
           totalQty: 0,
           price: item.price,
           notes: [],
+          firstAddedTime: orderTime,
+          latestAddedTime: orderTime,
         };
+      } else {
+        menuMap[item.menuItemId].firstAddedTime = Math.min(
+          menuMap[item.menuItemId].firstAddedTime,
+          orderTime
+        );
+        menuMap[item.menuItemId].latestAddedTime = Math.max(
+          menuMap[item.menuItemId].latestAddedTime,
+          orderTime
+        );
       }
       menuMap[item.menuItemId].totalQty += item.quantity;
       if (item.notes && item.notes.trim()) {
@@ -36,7 +53,22 @@ export function getGroupedRestaurantOrders(orders: UserOrder[]) {
     });
   });
 
-  return Object.values(menuMap).sort((a, b) => b.totalQty - a.totalQty);
+  const list = Object.values(menuMap);
+
+  if (sortBy === 'first_added') {
+    // Urut berdasarkan menu yang pertama kali dipesan/masuk list
+    return list.sort((a, b) => a.firstAddedTime - b.firstAddedTime);
+  }
+  if (sortBy === 'latest_added') {
+    // Urut berdasarkan waktu penambahan terakhir (terbaru di atas)
+    return list.sort((a, b) => b.latestAddedTime - a.latestAddedTime);
+  }
+  if (sortBy === 'name_asc') {
+    // Urut berdasarkan nama menu abjad A-Z
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  // Default qty_desc: terbanyak di atas
+  return list.sort((a, b) => b.totalQty - a.totalQty);
 }
 
 export function exportToExcel(event: EventData, orders: UserOrder[]) {
