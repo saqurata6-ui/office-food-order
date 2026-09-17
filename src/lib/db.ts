@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { EventData, UserOrder } from '@/types';
 import { supabase } from './supabase';
 
@@ -9,11 +10,11 @@ interface DatabaseSchema {
 }
 
 // In serverless environments like Vercel, the project folder is read-only.
-// We fallback to /tmp/db.json if writing to project folder fails.
 function getDbFilePath(): string {
-  if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  if (process.env.VERCEL) {
     return path.join('/tmp', 'makan_kantor_db.json');
   }
+  // For local development or non-Vercel environments:
   return path.join(process.cwd(), 'src', 'data', 'db.json');
 }
 
@@ -55,7 +56,13 @@ function ensureDbFile(): DatabaseSchema {
     }
     fs.writeFileSync(filePath, JSON.stringify(initialDb, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error creating db file:', err);
+    console.error('Error creating db file at primary path, trying os.tmpdir():', err);
+    try {
+      const tmpPath = path.join(os.tmpdir(), 'makan_kantor_db.json');
+      fs.writeFileSync(tmpPath, JSON.stringify(initialDb, null, 2), 'utf-8');
+    } catch (tmpErr) {
+      console.error('Error creating db file in os.tmpdir():', tmpErr);
+    }
   }
 
   return initialDb;
@@ -71,12 +78,12 @@ function saveDb(data: DatabaseSchema): void {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error saving db file to primary path:', err);
-    // Fallback to /tmp if write failed
+    // Fallback to os.tmpdir() if write failed
     try {
-      const tmpPath = path.join('/tmp', 'makan_kantor_db.json');
+      const tmpPath = path.join(os.tmpdir(), 'makan_kantor_db.json');
       fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
     } catch (tmpErr) {
-      console.error('Error saving db file to /tmp:', tmpErr);
+      console.error('Error saving db file to os.tmpdir():', tmpErr);
     }
   }
 }
@@ -258,6 +265,8 @@ export const db = {
   async getOrders(eventId: string): Promise<UserOrder[]> {
     if (!eventId || eventId === 'undefined') return [];
     const cleanId = decodeURIComponent(eventId).trim().toLowerCase();
+    const cache = getCache();
+    const localOrders = cache.orders[cleanId] || cache.orders[eventId] || [];
 
     if (supabase) {
       try {
@@ -268,7 +277,7 @@ export const db = {
           .order('created_at', { ascending: true });
 
         if (data && !error) {
-          return data.map((d: any) => ({
+          const sbOrders: UserOrder[] = data.map((d: any) => ({
             id: d.id,
             eventId: d.event_id,
             userName: d.user_name,
@@ -285,14 +294,27 @@ export const db = {
             createdAt: d.created_at,
             updatedAt: d.updated_at,
           }));
+
+          if (sbOrders.length > 0) {
+            cache.orders[cleanId] = sbOrders;
+            saveDb(cache);
+            return sbOrders;
+          } else if (localOrders.length > 0) {
+            // Supabase is empty but local cache has orders:
+            // Sync local orders to Supabase so they don't get lost
+            for (const ord of localOrders) {
+              this.saveOrder(ord).catch(() => {});
+            }
+            return localOrders;
+          }
+          return [];
         }
       } catch (sbErr) {
         console.error('Supabase getOrders error:', sbErr);
       }
     }
 
-    const cache = getCache();
-    return cache.orders[cleanId] || cache.orders[eventId] || [];
+    return localOrders;
   },
 
   async saveOrder(order: UserOrder): Promise<UserOrder> {
@@ -307,7 +329,19 @@ export const db = {
 
     if (supabase) {
       try {
-        const { error } = await supabase.from('orders').upsert({
+        // Check if there's an existing order in Supabase with matching name & event
+        const { data: existingRow } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('event_id', cleanEventId)
+          .ilike('user_name', orderToSave.userName.trim())
+          .maybeSingle();
+
+        if (existingRow?.id) {
+          orderToSave.id = existingRow.id;
+        }
+
+        const basePayload: Record<string, any> = {
           id: orderToSave.id,
           event_id: cleanEventId,
           user_name: orderToSave.userName.trim(),
@@ -318,17 +352,30 @@ export const db = {
           rounding_amount: orderToSave.roundingAmount,
           total_amount: orderToSave.totalAmount,
           is_paid: orderToSave.isPaid,
+          created_at: orderToSave.createdAt || now,
+          updated_at: now,
+        };
+
+        const fullPayload = {
+          ...basePayload,
           payment_method: orderToSave.paymentMethod || null,
           paid_amount: orderToSave.paidAmount ?? null,
           change_amount: orderToSave.changeAmount ?? null,
-          created_at: orderToSave.createdAt || now,
-          updated_at: now,
-        }, {
-          onConflict: 'event_id,user_name',
-        });
+        };
 
-        if (error) {
-          console.error('Supabase saveOrder error:', error);
+        let { error: upsertErr } = await supabase
+          .from('orders')
+          .upsert(fullPayload, { onConflict: 'id' });
+
+        if (upsertErr) {
+          console.warn('Supabase full upsert failed, retrying with base payload:', upsertErr.message);
+          const { error: baseErr } = await supabase
+            .from('orders')
+            .upsert(basePayload, { onConflict: 'id' });
+
+          if (baseErr) {
+            console.error('Supabase base upsert error:', baseErr);
+          }
         }
       } catch (sbErr) {
         console.error('Supabase saveOrder exception:', sbErr);
@@ -373,16 +420,25 @@ export const db = {
 
     if (supabase) {
       try {
-        await supabase
+        const baseUpdate: Record<string, any> = {
+          is_paid: isPaid,
+          updated_at: now,
+        };
+        const fullUpdate = {
+          ...baseUpdate,
+          payment_method: isPaid ? paymentMethod : null,
+          paid_amount: isPaid ? paidAmount : null,
+          change_amount: isPaid ? changeAmount : null,
+        };
+
+        const { error: patchErr } = await supabase
           .from('orders')
-          .update({
-            is_paid: isPaid,
-            payment_method: isPaid ? paymentMethod : null,
-            paid_amount: isPaid ? paidAmount : null,
-            change_amount: isPaid ? changeAmount : null,
-            updated_at: now,
-          })
+          .update(fullUpdate)
           .eq('id', orderId);
+
+        if (patchErr) {
+          await supabase.from('orders').update(baseUpdate).eq('id', orderId);
+        }
       } catch (sbErr) {
         console.error('Supabase updateOrderStatus error:', sbErr);
       }

@@ -114,10 +114,12 @@ export async function POST(
     };
 
     const saved = await db.saveOrder(userOrder);
+    const updatedOrders = await db.getOrders(event.id);
 
     return NextResponse.json({
       success: true,
       data: saved,
+      orders: updatedOrders,
       message: 'Pesanan berhasil disimpan!',
     });
   } catch (error) {
@@ -142,7 +144,12 @@ export async function PATCH(
 
     if (action === 'delete') {
       const deleted = await db.deleteOrder(cleanId, orderId);
-      return NextResponse.json({ success: deleted, message: deleted ? 'Pesanan dihapus' : 'Gagal menghapus' });
+      const remainingOrders = await db.getOrders(cleanId);
+      return NextResponse.json({
+        success: deleted,
+        orders: remainingOrders,
+        message: deleted ? 'Pesanan dihapus' : 'Gagal menghapus',
+      });
     }
 
     if (typeof isPaid === 'boolean') {
@@ -151,7 +158,12 @@ export async function PATCH(
         paidAmount: paidAmount != null ? Number(paidAmount) : undefined,
         changeAmount: changeAmount != null ? Number(changeAmount) : undefined,
       });
-      return NextResponse.json({ success: updated, message: 'Status pembayaran diperbarui' });
+      const currentOrders = await db.getOrders(cleanId);
+      return NextResponse.json({
+        success: updated,
+        orders: currentOrders,
+        message: 'Status pembayaran diperbarui',
+      });
     }
 
     return NextResponse.json({ success: false, message: 'Aksi tidak valid' }, { status: 400 });

@@ -85,7 +85,37 @@ export default function OrderPage() {
         setError(json.message || 'Acara tidak ditemukan.');
       } else {
         setEvent(json.data);
-        setOrders(json.orders || []);
+        const serverOrders: UserOrder[] = json.orders || [];
+
+        // Gabungkan dengan backup pesanan lokal jika serverless dingin
+        try {
+          const localOrdersRaw = localStorage.getItem(`makan_kantor_orders_${eventId}`);
+          const localList: UserOrder[] = localOrdersRaw ? JSON.parse(localOrdersRaw) : [];
+          const merged = [...serverOrders];
+
+          localList.forEach((lo) => {
+            const exists = merged.some(
+              (so) => so.id === lo.id || normalizeName(so.userName) === normalizeName(lo.userName)
+            );
+            if (!exists) {
+              merged.push(lo);
+              // Sinkronkan ke server secara background jika belum ada di server
+              fetch(`/api/events/${eventId}/orders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userName: lo.userName,
+                  items: lo.items,
+                  orderId: lo.id,
+                  includeTax: lo.taxAmount > 0,
+                }),
+              }).catch(() => {});
+            }
+          });
+          setOrders(merged);
+        } catch (e) {
+          setOrders(serverOrders);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -294,9 +324,45 @@ export default function OrderPage() {
         return;
       }
 
-      // Save user name locally
+      const savedOrder: UserOrder = json.data;
+      const returnedOrders: UserOrder[] = json.orders || [];
+
+      // 1. Masuk ke mode edit pesanan tersimpan milik pemesan ini
+      setExistingOrder(savedOrder);
+
+      // 2. Perbarui state orders secara langsung agar chip langsung muncul
+      if (returnedOrders.length > 0) {
+        setOrders(returnedOrders);
+      } else {
+        setOrders((prev) => {
+          const idx = prev.findIndex(
+            (o) => o.id === savedOrder.id || normalizeName(o.userName) === normalizeName(savedOrder.userName)
+          );
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = savedOrder;
+            return next;
+          }
+          return [...prev, savedOrder];
+        });
+      }
+
+      // 3. Simpan nama dan backup pesanan ke localStorage browser
       try {
         localStorage.setItem('makan_kantor_user_name', userName.trim());
+        localStorage.setItem(`makan_kantor_order_${eventId}`, JSON.stringify(savedOrder));
+
+        const existingLocalOrdersRaw = localStorage.getItem(`makan_kantor_orders_${eventId}`);
+        const localList: UserOrder[] = existingLocalOrdersRaw ? JSON.parse(existingLocalOrdersRaw) : [];
+        const lIdx = localList.findIndex(
+          (o) => o.id === savedOrder.id || normalizeName(o.userName) === normalizeName(savedOrder.userName)
+        );
+        if (lIdx >= 0) {
+          localList[lIdx] = savedOrder;
+        } else {
+          localList.push(savedOrder);
+        }
+        localStorage.setItem(`makan_kantor_orders_${eventId}`, JSON.stringify(localList));
 
         // Update history
         const historyRaw = localStorage.getItem('makan_kantor_history');
@@ -322,7 +388,7 @@ export default function OrderPage() {
         origin: { y: 0.8 },
       });
 
-      // Refresh orders
+      // Refresh data dari server untuk sinkronisasi menyeluruh
       await fetchEventData();
 
       setTimeout(() => setSubmitSuccess(false), 4000);

@@ -1,4 +1,4 @@
-﻿-- SQL Schema untuk Supabase (PostgreSQL)
+-- SQL Schema untuk Supabase (PostgreSQL)
 -- Jalankan skrip ini di Supabase SQL Editor jika ingin menggunakan database cloud Supabase!
 
 -- 1. Tabel Events
@@ -30,10 +30,18 @@ CREATE TABLE IF NOT EXISTS orders (
   rounding_amount NUMERIC NOT NULL DEFAULT 0,
   total_amount NUMERIC NOT NULL DEFAULT 0,
   is_paid BOOLEAN NOT NULL DEFAULT FALSE,
+  payment_method TEXT,
+  paid_amount NUMERIC,
+  change_amount NUMERIC,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(event_id, user_name)
 );
+
+-- Migrasi jika tabel orders sudah dibuat sebelumnya:
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_amount NUMERIC;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS change_amount NUMERIC;
 
 -- Indeks untuk pencarian cepat
 CREATE INDEX IF NOT EXISTS idx_orders_event_id ON orders(event_id);

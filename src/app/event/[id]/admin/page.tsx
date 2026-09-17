@@ -34,6 +34,7 @@ import {
   SlidersHorizontal,
   Percent,
   X,
+  RotateCcw,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
@@ -98,6 +99,7 @@ export default function EventAdminPage() {
   const [isSavingTax, setIsSavingTax] = useState(false);
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const fetchEventAndOrders = async (pinToUse?: string) => {
     if (!eventId || eventId === 'undefined') return;
@@ -142,7 +144,26 @@ export default function EventAdminPage() {
       }
 
       setEvent(json.data);
-      setOrders(json.orders || []);
+      const serverOrders: UserOrder[] = json.orders || [];
+
+      // Gabungkan dengan backup pesanan lokal jika serverless dingin
+      try {
+        const localOrdersRaw = localStorage.getItem(`makan_kantor_orders_${eventId}`);
+        const localList: UserOrder[] = localOrdersRaw ? JSON.parse(localOrdersRaw) : [];
+        const merged = [...serverOrders];
+
+        localList.forEach((lo) => {
+          const exists = merged.some(
+            (so) => so.id === lo.id || so.userName.trim().toLowerCase() === lo.userName.trim().toLowerCase()
+          );
+          if (!exists) {
+            merged.push(lo);
+          }
+        });
+        setOrders(merged);
+      } catch (e) {
+        setOrders(serverOrders);
+      }
 
       if (json.isAdmin || pinParam === json.data.adminPin) {
         setIsPinAuthenticated(true);
@@ -155,11 +176,22 @@ export default function EventAdminPage() {
     }
   };
 
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchEventAndOrders();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
+
   useEffect(() => {
     if (eventId && eventId !== 'undefined') {
       fetchEventAndOrders();
+      // Auto refresh berkala setiap 8 detik agar PIC selalu melihat pesanan terbaru secara real-time
+      const interval = setInterval(() => {
+        fetchEventAndOrders();
+      }, 8000);
+      return () => clearInterval(interval);
     }
-  }, [eventId]);
+  }, [eventId, adminPin]);
 
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -765,6 +797,17 @@ export default function EventAdminPage() {
 
           {/* Quick Action Buttons */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 text-slate-700 shadow-2xs"
+              title="Segarkan data pesanan terbaru dari server"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 text-slate-500 ${isRefreshing ? 'animate-spin text-orange-600' : ''}`} />
+              <span>{isRefreshing ? 'Memuat...' : 'Segarkan'}</span>
+            </button>
+
             <button
               type="button"
               onClick={handleOpenTaxModal}
