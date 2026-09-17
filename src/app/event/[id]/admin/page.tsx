@@ -37,6 +37,7 @@ import {
   RotateCcw,
   ChefHat,
   ChevronDown,
+  Columns2,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
@@ -44,6 +45,7 @@ import {
   exportToExcel,
   exportToPdf,
   exportToCategoryPdf,
+  exportToLandscapeHalfA4Pdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -957,7 +959,32 @@ export default function EventAdminPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
 
-                    {/* Opsi 1: Rekap Pesanan per Kategori Menu (Ringkas, Clean, Tanpa Harga) */}
+                    {/* Opsi 1: Rekap 1/2 A4 Landscape (Kanan - Kiri, Pas 1 Lembar) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToLandscapeHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-sky-600 group-hover:text-white transition">
+                        <Columns2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Rekap Sejajar (Kanan - Kiri)</span>
+                          <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">1/2 A4</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Format landscape 2 kolom sejajar, pas untuk 1 lembar setengah kertas A4.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 2: Rekap Pesanan per Kategori Menu (A4 Vertikal) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -971,18 +998,18 @@ export default function EventAdminPage() {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Rekap Pesanan per Kategori</span>
+                          <span>Rekap per Kategori (A4 Vertikal)</span>
                           <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Porsi & Catatan</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Format clean & simple tanpa harga, dikelompokkan rapi berdasarkan kategori menu acara.
+                          Daftar berurutan ke bawah per kategori menu, bersih tanpa harga.
                         </div>
                       </div>
                     </button>
 
                     <div className="h-px bg-slate-100 my-1" />
 
-                    {/* Opsi 2: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
+                    {/* Opsi 3: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
                     <button
                       type="button"
                       onClick={() => {

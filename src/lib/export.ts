@@ -421,9 +421,281 @@ export function isBeverageItem(menuItemId: string, menuName: string, menuItems: 
   return drinkKeywords.some((kw) => name.includes(kw));
 }
 
-// Rekap PDF Bersih & Ringkas per Kategori Menu (Tanpa Harga, Porsi Rapi & Catatan Lengkap)
+// Rekap PDF Format 1/2 A4 Landscape (210mm x 148.5mm / A5 Landscape, Kiri-Kanan)
+// Didesain sangat rapi, bersih, hemat kertas, dan membagi kategori secara seimbang
 export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]) {
-  exportToCategoryPdf(event, orders);
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: [148.5, 210], // 210mm x 148.5mm
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 148.5;
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2; // 190mm
+  const colGap = 8;
+  const colWidth = (contentWidth - colGap) / 2; // 91mm
+
+  // 1. Kumpulkan data menu & kelompokkan per kategori
+  const knownCategories: string[] = [];
+  if (event.menuItems && Array.isArray(event.menuItems)) {
+    event.menuItems.forEach((m) => {
+      const cat = (m.category || '').trim();
+      if (cat && !knownCategories.includes(cat)) {
+        knownCategories.push(cat);
+      }
+    });
+  }
+
+  const categoryMap: Record<string, Record<string, { name: string; totalQty: number; notes: string[] }>> = {};
+
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      const foundMenuItem = event.menuItems?.find(
+        (m) => m.id === item.menuItemId || m.name.toLowerCase().trim() === item.menuItemName.toLowerCase().trim()
+      );
+
+      let category = (foundMenuItem?.category || '').trim();
+      if (!category) {
+        category = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || [])
+          ? 'Minuman'
+          : 'Makanan';
+      }
+
+      if (!categoryMap[category]) {
+        categoryMap[category] = {};
+        if (!knownCategories.includes(category)) {
+          knownCategories.push(category);
+        }
+      }
+
+      const catGroup = categoryMap[category];
+      if (!catGroup[item.menuItemId]) {
+        catGroup[item.menuItemId] = {
+          name: item.menuItemName,
+          totalQty: 0,
+          notes: [],
+        };
+      }
+
+      catGroup[item.menuItemId].totalQty += item.quantity;
+      if (item.notes && item.notes.trim()) {
+        const trimmed = item.notes.trim();
+        if (!catGroup[item.menuItemId].notes.includes(trimmed)) {
+          catGroup[item.menuItemId].notes.push(trimmed);
+        }
+      }
+    });
+  });
+
+  const activeCategories = knownCategories.filter(
+    (cat) => categoryMap[cat] && Object.keys(categoryMap[cat]).length > 0
+  );
+  Object.keys(categoryMap).forEach((cat) => {
+    if (!activeCategories.includes(cat) && Object.keys(categoryMap[cat]).length > 0) {
+      activeCategories.push(cat);
+    }
+  });
+
+  let grandTotalQty = 0;
+  activeCategories.forEach((cat) => {
+    Object.values(categoryMap[cat]).forEach((it) => {
+      grandTotalQty += it.totalQty;
+    });
+  });
+
+  // 2. Bagi kategori ke Kolom Kiri dan Kolom Kanan
+  // Prioritas: kategori minuman ditaruh di kanan, kategori makanan/lainnya di kiri.
+  // Jika tidak seimbang atau semua jenis sama, bagi rata secara proporsional.
+  let leftCategories: string[] = [];
+  let rightCategories: string[] = [];
+
+  const beverageCategories = activeCategories.filter((cat) => {
+    const c = cat.toLowerCase();
+    return c.includes('minum') || c.includes('drink') || c.includes('beverage') || c.includes('kopi') || c.includes('jus') || c.includes('tea') || c.includes('teh');
+  });
+  const foodCategories = activeCategories.filter((cat) => !beverageCategories.includes(cat));
+
+  if (beverageCategories.length > 0 && foodCategories.length > 0) {
+    leftCategories = foodCategories;
+    rightCategories = beverageCategories;
+  } else {
+    // Bagi seimbang berdasarkan estimasi bobot baris
+    let leftWeight = 0;
+    let rightWeight = 0;
+    activeCategories.forEach((cat) => {
+      const weight = Object.keys(categoryMap[cat]).length + 2;
+      if (leftWeight <= rightWeight) {
+        leftCategories.push(cat);
+        leftWeight += weight;
+      } else {
+        rightCategories.push(cat);
+        rightWeight += weight;
+      }
+    });
+  }
+
+  // 3. Header Utama (Landscape 1/2 A4)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text('REKAP PESANAN', margin, 11);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  const restoTitle = event.restaurantName ? event.restaurantName.toUpperCase() : event.title;
+  doc.text(restoTitle, margin + 48, 11);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  const subInfo = `${formatIndonesianDate(event.date)} pk ${event.time} WIB | PIC: ${event.picName || '-'}`;
+  doc.text(subInfo, pageWidth - margin, 11, { align: 'right' });
+
+  // Garis pemisah header
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.5);
+  doc.line(margin, 14, pageWidth - margin, 14);
+
+  // Garis vertikal pemisah kolom kiri & kanan di tengah
+  const colDividerX = margin + colWidth + colGap / 2; // 105mm
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.3);
+  doc.line(colDividerX, 17, colDividerX, pageHeight - 16);
+
+  // Helper untuk merender kelompok kategori pada satu kolom (kiri atau kanan)
+  const renderColumn = (colCats: string[], startX: number) => {
+    let colY = 17;
+
+    if (colCats.length === 0) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('(Tidak ada pesanan)', startX + 2, colY + 6);
+      return;
+    }
+
+    colCats.forEach((catName) => {
+      const items = Object.values(categoryMap[catName]);
+      const catTotal = items.reduce((sum, it) => sum + it.totalQty, 0);
+
+      const isDrink = catName.toLowerCase().includes('minum') || catName.toLowerCase().includes('drink') || catName.toLowerCase().includes('teh') || catName.toLowerCase().includes('kopi');
+      const headerColor: [number, number, number] = isDrink ? [3, 105, 161] : [30, 41, 59];
+
+      const tableRows = items.map((item) => {
+        let text = item.name;
+        if (item.notes.length > 0) {
+          text += '\n' + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
+        }
+        return [text, `${item.totalQty}x`];
+      });
+
+      autoTable(doc, {
+        startY: colY,
+        margin: { left: startX, right: pageWidth - startX - colWidth },
+        tableWidth: colWidth,
+        head: [[catName.toUpperCase(), `${catTotal}x`]],
+        body: tableRows,
+        foot: [[`Total ${catName}`, `${catTotal}x`]],
+        theme: 'plain',
+        headStyles: {
+          fillColor: headerColor,
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 8,
+          cellPadding: { top: 1.8, bottom: 1.8, left: 2.5, right: 2.5 },
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [30, 41, 59],
+          cellPadding: { top: 2, bottom: 2, left: 2, right: 2 },
+          lineColor: [241, 245, 249],
+          lineWidth: { bottom: 0.2 },
+        },
+        footStyles: {
+          fillColor: [248, 250, 252],
+          textColor: [71, 85, 105],
+          fontStyle: 'bold',
+          fontSize: 7.5,
+          cellPadding: { top: 1.8, bottom: 1.8, left: 2.5, right: 2.5 },
+          lineColor: [226, 232, 240],
+          lineWidth: { top: 0.3 },
+        },
+        columnStyles: {
+          0: { cellWidth: colWidth - 20, halign: 'left', valign: 'top' },
+          1: { cellWidth: 20, halign: 'center', valign: 'top', fontStyle: 'bold' },
+        },
+        didDrawCell: (data) => {
+          // Format kolom jumlah: badge kotak rapi dengan teks terpusat
+          if (data.section === 'body' && data.column.index === 1) {
+            const rawVal = String(data.cell.raw || '');
+            const x = data.cell.x + 2.5;
+            const y = data.cell.y + 1;
+            const w = data.cell.width - 5;
+            const h = Math.min(data.cell.height - 2, 5.5);
+
+            doc.setFillColor(248, 250, 252);
+            doc.setDrawColor(203, 213, 225);
+            doc.setLineWidth(0.2);
+            doc.roundedRect(x, y, w, h, 0.8, 0.8, 'FD');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.setTextColor(15, 23, 42);
+            doc.text(rawVal, data.cell.x + data.cell.width / 2, y + h / 2 + 1, {
+              align: 'center',
+            });
+          }
+        },
+      });
+
+      colY = (doc as any).lastAutoTable.finalY + 4;
+    });
+  };
+
+  // Render Kolom Kiri
+  renderColumn(leftCategories, margin);
+
+  // Render Kolom Kanan
+  const rightColX = margin + colWidth + colGap; // 109mm
+  renderColumn(rightCategories, rightColX);
+
+  // 4. Footer Grand Total di Bagian Bawah
+  const footerY = pageHeight - 12;
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.4);
+  doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text('REKAPITULASI PESANAN 1/2 A4', margin, footerY + 3);
+
+  const badgeW = 24;
+  const badgeH = 6;
+  const badgeX = pageWidth - margin - badgeW;
+  const badgeY = footerY;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text('TOTAL PESANAN:', badgeX - 3, footerY + 4.2, { align: 'right' });
+
+  doc.setFillColor(15, 23, 42);
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1, 1, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`${grandTotalQty} Porsi`, badgeX + badgeW / 2, badgeY + badgeH / 2 + 1, {
+    align: 'center',
+  });
+
+  const cleanResto = (event.restaurantName || event.title || 'Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Rekap_1-2_A4_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
 }
 
 export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
