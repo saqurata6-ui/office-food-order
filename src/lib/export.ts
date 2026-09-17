@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { EventData, UserOrder } from '@/types';
-import { formatRupiah } from './calculator';
+import { formatRupiah, formatIndonesianDate } from './calculator';
 
 export function getGroupedRestaurantOrders(
   orders: UserOrder[],
@@ -252,7 +252,7 @@ export function generateWhatsAppMessage(event: EventData, baseUrl: string) {
   return `🍱 *Pesanan Makan Kantor: ${event.title}*
 👤 *PIC:* ${event.picName}
 📍 *Tempat:* ${event.restaurantName}${event.restaurantAddress ? ` (${event.restaurantAddress})` : ''}
-⏰ *Waktu:* ${event.date} jam ${event.time}
+⏰ *Waktu:* ${formatIndonesianDate(event.date)} jam ${event.time} WIB
 
 Yuk langsung pilih menu makanan & minuman masing-masing di link berikut:
 👉 ${url}

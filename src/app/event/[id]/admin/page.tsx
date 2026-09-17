@@ -36,7 +36,7 @@ import {
   X,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
-import { formatRupiah } from '@/lib/calculator';
+import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
 import {
   exportToExcel,
   exportToPdf,
@@ -754,7 +754,7 @@ export default function EventAdminPage() {
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" /> {event.date}
+                <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {formatIndonesianDate(event.date)}
               </span>
               <span>•</span>
               <span className="flex items-center gap-1">

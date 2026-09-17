@@ -19,6 +19,7 @@ import {
   Store,
   X,
 } from 'lucide-react';
+import { formatIndonesianDate } from '@/lib/calculator';
 
 interface LocalHistoryItem {
   id: string;
@@ -257,8 +258,8 @@ export default function HomePage() {
                       <span>PIC: <strong>{item.picName}</strong></span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{item.date} • {item.time} WIB</span>
+                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{formatIndonesianDate(item.date)} • {item.time} WIB</span>
                     </div>
                   </div>
                 </div>

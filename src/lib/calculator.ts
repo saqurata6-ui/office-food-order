@@ -100,3 +100,40 @@ export function calculateOrder(
     totalAmount,
   };
 }
+
+/**
+ * Format string tanggal (YYYY-MM-DD) ke format hari & tanggal bahasa Indonesia
+ * Contoh: "2026-09-17" -> "Kamis, 17 September 2026"
+ */
+export function formatIndonesianDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.trim().split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const monthNames = [
+          'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+          'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+        ];
+        return `${dayNames[d.getDay()]}, ${day} ${monthNames[d.getMonth()]} ${year}`;
+      }
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  return dateStr;
+}

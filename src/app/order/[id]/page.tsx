@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
-import { formatRupiah, calculateOrder, normalizeName } from '@/lib/calculator';
+import { formatRupiah, calculateOrder, normalizeName, formatIndonesianDate } from '@/lib/calculator';
 
 export default function OrderPage() {
   const params = useParams();
@@ -438,8 +438,8 @@ export default function OrderPage() {
             <span>{event.time} WIB</span>
           </div>
           <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-            <span>{event.date}</span>
+            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span className="font-medium text-slate-700">{formatIndonesianDate(event.date)}</span>
           </div>
         </div>
 
@@ -486,7 +486,7 @@ export default function OrderPage() {
           <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
-            placeholder="Ketik namamu (misal: Budi Santoso / Sarah IT)"
+            placeholder="Ketik namamu (misal: Budi Santoso / Sarah)"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
             disabled={event.isLocked}
