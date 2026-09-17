@@ -247,6 +247,157 @@ export function exportToPdf(event: EventData, orders: UserOrder[]) {
   doc.save(filename);
 }
 
+// Rekap PDF Dapur / Resto Ringkas: Hanya Menu, Jumlah (x), dan Catatan (Dipisahkan Makanan & Minuman)
+export function exportToKitchenPdf(event: EventData, orders: UserOrder[]) {
+  const doc = new jsPDF();
+
+  // Helper untuk deteksi minuman berdasarkan kategori atau nama menu
+  const isDrink = (menuItemId: string, menuName: string): boolean => {
+    const foundItem = event.menuItems?.find((m) => m.id === menuItemId);
+    const category = (foundItem?.category || '').toLowerCase();
+    const name = (menuName || foundItem?.name || '').toLowerCase();
+
+    if (category.includes('minum') || category.includes('drink') || category.includes('beverage')) {
+      return true;
+    }
+    // Fallback deteksi dari kata kunci nama menu jika kategorinya tidak spesifik
+    const drinkKeywords = [
+      'es ', 'es-', 'es.', 'teh', 'kopi', 'coffee', 'jeruk', 'lemon', 'air mineral', 'mineral',
+      'juice', 'jus', 'susu', 'boba', 'latte', 'cappuccino', 'syrup', 'sirup', 'wedang', 'jahe', 'liang teh'
+    ];
+    return drinkKeywords.some((kw) => name.includes(kw));
+  };
+
+  // Kumpulkan pesanan makanan & minuman
+  const foodMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
+  const drinkMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
+
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      const isBeverage = isDrink(item.menuItemId, item.menuItemName);
+      const targetMap = isBeverage ? drinkMap : foodMap;
+
+      if (!targetMap[item.menuItemId]) {
+        targetMap[item.menuItemId] = {
+          name: item.menuItemName,
+          totalQty: 0,
+          notes: [],
+        };
+      }
+      targetMap[item.menuItemId].totalQty += item.quantity;
+      if (item.notes && item.notes.trim()) {
+        targetMap[item.menuItemId].notes.push(item.notes.trim());
+      }
+    });
+  });
+
+  const foodList = Object.values(foodMap);
+  const drinkList = Object.values(drinkMap);
+
+  // Title Utama
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(20, 24, 33);
+  doc.text('DAFTAR PESANAN MENU', 14, 18);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Restoran: ${event.restaurantName || '-'}`, 14, 25);
+
+  let currentY = 32;
+
+  // 1. Bagian Makanan
+  if (foodList.length > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(30, 41, 59);
+    doc.text('MAKANAN', 14, currentY);
+
+    const foodRows = foodList.map((item, idx) => [
+      idx + 1,
+      item.name,
+      `${item.totalQty}x`,
+      item.notes.length > 0 ? item.notes.map((n) => `• ${n}`).join('\n') : '-',
+    ]);
+
+    const totalFoodQty = foodList.reduce((sum, it) => sum + it.totalQty, 0);
+    foodRows.push([
+      '',
+      'TOTAL MAKANAN',
+      `${totalFoodQty}x`,
+      '',
+    ]);
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [['No', 'Nama Menu', 'Jumlah', 'Catatan']],
+      body: foodRows,
+      theme: 'grid',
+      headStyles: { fillColor: [45, 55, 72], textColor: 255, fontStyle: 'bold', fontSize: 9.5 },
+      bodyStyles: { fontSize: 9, textColor: 30 },
+      columnStyles: {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { fontStyle: 'bold' },
+        2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+        3: { textColor: [71, 85, 105] },
+      },
+      styles: { cellPadding: 3 },
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 10;
+  }
+
+  // 2. Bagian Minuman
+  if (drinkList.length > 0) {
+    // Jika posisi mendekati batas bawah halaman, buat halaman baru
+    if (currentY > 230) {
+      doc.addPage();
+      currentY = 18;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(30, 41, 59);
+    doc.text('MINUMAN', 14, currentY);
+
+    const drinkRows = drinkList.map((item, idx) => [
+      idx + 1,
+      item.name,
+      `${item.totalQty}x`,
+      item.notes.length > 0 ? item.notes.map((n) => `• ${n}`).join('\n') : '-',
+    ]);
+
+    const totalDrinkQty = drinkList.reduce((sum, it) => sum + it.totalQty, 0);
+    drinkRows.push([
+      '',
+      'TOTAL MINUMAN',
+      `${totalDrinkQty}x`,
+      '',
+    ]);
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [['No', 'Nama Menu', 'Jumlah', 'Catatan']],
+      body: drinkRows,
+      theme: 'grid',
+      headStyles: { fillColor: [2, 132, 199], textColor: 255, fontStyle: 'bold', fontSize: 9.5 },
+      bodyStyles: { fontSize: 9, textColor: 30 },
+      columnStyles: {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { fontStyle: 'bold' },
+        2: { cellWidth: 24, halign: 'center', fontStyle: 'bold' },
+        3: { textColor: [71, 85, 105] },
+      },
+      styles: { cellPadding: 3 },
+    });
+  }
+
+  const cleanResto = (event.restaurantName || 'Resto').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Daftar_Pesanan_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
+}
+
 export function generateWhatsAppMessage(event: EventData, baseUrl: string) {
   const url = `${baseUrl}/order/${event.id}`;
   return `🍱 *Pesanan Makan Kantor: ${event.title}*

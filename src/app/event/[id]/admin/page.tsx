@@ -35,12 +35,15 @@ import {
   Percent,
   X,
   RotateCcw,
+  ChefHat,
+  ChevronDown,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
 import {
   exportToExcel,
   exportToPdf,
+  exportToKitchenPdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -100,6 +103,7 @@ export default function EventAdminPage() {
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPdfDropdownOpen, setIsPdfDropdownOpen] = useState(false);
 
   const fetchEventAndOrders = async (pinToUse?: string) => {
     if (!eventId || eventId === 'undefined') return;
@@ -929,15 +933,80 @@ export default function EventAdminPage() {
               <span>Download Excel</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => exportToPdf(event, orders)}
-              disabled={orders.length === 0}
-              className="px-3.5 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              <span>Download PDF</span>
-            </button>
+            {/* PDF Export Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsPdfDropdownOpen((prev) => !prev)}
+                disabled={orders.length === 0}
+                className="px-3.5 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Download PDF</span>
+                <ChevronDown className="w-3 h-3 text-rose-200" />
+              </button>
+
+              {isPdfDropdownOpen && orders.length > 0 && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setIsPdfDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 sm:left-0 sm:right-auto mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-3 py-1.5 border-b border-slate-100">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
+                    </div>
+
+                    {/* Format Baru: Dapur / Resto (Hanya Menu, Qty x, Catatan) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToKitchenPdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-emerald-600 group-hover:text-white transition">
+                        <ChefHat className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Daftar Pesanan Dapur / Resto</span>
+                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Baru</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Pisah makanan & minuman, format <b>3x</b>, tanpa harga & tanpa info bayar.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Format Lama: Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToPdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-rose-600 group-hover:text-white transition">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">
+                          Rekap Lengkap (Office & Split Bill)
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Tabel pesanan resto dengan harga & rekap split-bill per karyawan.
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
 
             <button
               type="button"
