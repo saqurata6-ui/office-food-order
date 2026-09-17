@@ -31,8 +31,11 @@ import {
   ArrowUpDown,
   Banknote,
   Wallet,
+  SlidersHorizontal,
+  Percent,
+  X,
 } from 'lucide-react';
-import { EventData, UserOrder, MenuItem } from '@/types';
+import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah } from '@/lib/calculator';
 import {
   exportToExcel,
@@ -83,6 +86,16 @@ export default function EventAdminPage() {
   const [paymentModalOrder, setPaymentModalOrder] = useState<UserOrder | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash'>('cash');
   const [cashGivenAmount, setCashGivenAmount] = useState<string>('');
+
+  // Tax Settings Modal state
+  const [isTaxModalOpen, setIsTaxModalOpen] = useState(false);
+  const [editUseTax, setEditUseTax] = useState(false);
+  const [editTaxPercent, setEditTaxPercent] = useState<number | string>(10);
+  const [editUseService, setEditUseService] = useState(false);
+  const [editServicePercent, setEditServicePercent] = useState<number | string>(5);
+  const [editRounding, setEditRounding] = useState<RoundingType>('none');
+  const [recalculateOrdersOption, setRecalculateOrdersOption] = useState(true);
+  const [isSavingTax, setIsSavingTax] = useState(false);
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -300,6 +313,65 @@ export default function EventAdminPage() {
     } catch (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi.');
+    }
+  };
+
+  // Open Tax Settings Modal
+  const handleOpenTaxModal = () => {
+    if (!event) return;
+    setEditUseTax(Boolean(event.taxConfig?.useTax));
+    setEditTaxPercent(event.taxConfig?.taxPercent ?? 10);
+    setEditUseService(Boolean(event.taxConfig?.useServiceCharge));
+    setEditServicePercent(event.taxConfig?.serviceChargePercent ?? 5);
+    setEditRounding(event.taxConfig?.rounding || 'none');
+    setRecalculateOrdersOption(true);
+    setIsTaxModalOpen(true);
+  };
+
+  const handleCloseTaxModal = () => {
+    setIsTaxModalOpen(false);
+  };
+
+  // Save Tax Settings
+  const handleSaveTaxConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!event) return;
+
+    setIsSavingTax(true);
+    try {
+      const newTaxConfig: TaxConfig = {
+        useTax: editUseTax,
+        taxPercent: Math.max(0, Number(editTaxPercent) || 0),
+        useServiceCharge: editUseService,
+        serviceChargePercent: Math.max(0, Number(editServicePercent) || 0),
+        rounding: editRounding,
+      };
+
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taxConfig: newTaxConfig,
+          recalculateOrders: recalculateOrdersOption,
+          adminPin,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setEvent(json.data);
+        if (json.orders) {
+          setOrders(json.orders);
+        }
+        setIsTaxModalOpen(false);
+      } else {
+        alert(json.message || 'Gagal menyimpan pengaturan pajak.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi saat menyimpan pengaturan pajak.');
+    } finally {
+      setIsSavingTax(false);
     }
   };
 
@@ -691,12 +763,22 @@ export default function EventAdminPage() {
             </div>
           </div>
 
-          {/* Lock / Unlock Toggle Button */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          {/* Quick Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenTaxModal}
+              className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 text-slate-800 shadow-2xs"
+              title="Ubah persentase PPN, service charge, atau pembulatan nota"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-orange-600 shrink-0" />
+              <span>Setting Pajak / PPN</span>
+            </button>
+
             <button
               type="button"
               onClick={handleToggleLock}
-              className={`px-5 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition shadow-sm ${
+              className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition shadow-sm ${
                 event.isLocked
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-red-600 hover:bg-red-700 text-white'
@@ -705,12 +787,12 @@ export default function EventAdminPage() {
               {event.isLocked ? (
                 <>
                   <Unlock className="w-4 h-4" />
-                  <span>Buka Kunci Pesanan</span>
+                  <span>Buka Kunci</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Kunci Pesanan Sekarang (Lock)</span>
+                  <span>Kunci Pesanan</span>
                 </>
               )}
             </button>
@@ -726,7 +808,7 @@ export default function EventAdminPage() {
           }`}
         >
           <div className="flex items-center gap-2">
-            {event.isLocked ? <Lock className="w-4 h-4 text-red-600" /> : <Unlock className="w-4 h-4 text-emerald-600" />}
+            {event.isLocked ? <Lock className="w-4 h-4 text-red-600 shrink-0" /> : <Unlock className="w-4 h-4 text-emerald-600 shrink-0" />}
             <span>
               Status: <strong>{event.isLocked ? 'TERKUNCI' : 'DIBUKA'}</strong> —{' '}
               {event.isLocked
@@ -742,6 +824,31 @@ export default function EventAdminPage() {
           >
             Lihat Form Pemesan <ExternalLink className="w-3 h-3" />
           </Link>
+        </div>
+
+        {/* Tax Config Info Bar */}
+        <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 text-slate-700">
+            <Percent className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+            <span>
+              Pajak Restoran: <strong className="text-slate-900">{event.taxConfig.useTax ? `PPN ${event.taxConfig.taxPercent}%` : 'Tanpa PPN'}</strong>
+              {event.taxConfig.useServiceCharge && (
+                <span> • Service Charge: <strong className="text-slate-900">{event.taxConfig.serviceChargePercent}%</strong></span>
+              )}
+              {event.taxConfig.rounding && event.taxConfig.rounding !== 'none' && (
+                <span className="hidden sm:inline"> • Pembulatan: <strong className="text-slate-900">{event.taxConfig.rounding.replace('_', ' ')}</strong></span>
+              )}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleOpenTaxModal}
+            className="text-orange-600 hover:text-orange-700 font-bold hover:underline flex items-center gap-1 text-[11px]"
+          >
+            <span>Ubah Pajak / PPN</span>
+            <span>⚙️</span>
+          </button>
         </div>
 
         {/* Share & Export Action Bar */}
@@ -839,7 +946,16 @@ export default function EventAdminPage() {
             <CreditCard className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate">{formatRupiah(totalRestoBill)}</p>
-          <p className="text-[11px] text-slate-500">Belum termasuk pajak resto</p>
+          <div className="flex items-center justify-between text-[11px] text-slate-500">
+            <span>{event.taxConfig.useTax ? `+ PPN ${event.taxConfig.taxPercent}%` : 'Tanpa PPN'}</span>
+            <button
+              type="button"
+              onClick={handleOpenTaxModal}
+              className="text-orange-600 font-bold hover:underline"
+            >
+              Ubah
+            </button>
+          </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1">
@@ -848,9 +964,18 @@ export default function EventAdminPage() {
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <p className="text-xl sm:text-2xl font-extrabold text-emerald-600 truncate">{formatRupiah(totalCollectedBills)}</p>
-          <p className="text-[11px] text-emerald-700 font-medium truncate">
-            Terkumpul: {formatRupiah(totalPaidAmount)}
-          </p>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-emerald-700 font-medium truncate">
+              Terkumpul: {formatRupiah(totalPaidAmount)}
+            </span>
+            <button
+              type="button"
+              onClick={handleOpenTaxModal}
+              className="text-orange-600 font-bold hover:underline shrink-0 ml-1"
+            >
+              Setting
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1878,6 +2003,222 @@ export default function EventAdminPage() {
                 <span>Simpan Pembayaran</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PENGATURAN PAJAK & BIAYA RESTORAN */}
+      {isTaxModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Pengaturan Pajak & Biaya Resto
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Sesuaikan persentase pajak jika ada perubahan dari kasir/struk restoran.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseTaxModal}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTaxConfig} className="space-y-4">
+              {/* Section 1: PPN / Pajak Resto */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={editUseTax}
+                      onChange={(e) => setEditUseTax(e.target.checked)}
+                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300"
+                    />
+                    <span className="text-xs font-bold text-slate-800">
+                      Gunakan PPN / Pajak Resto (PB1)
+                    </span>
+                  </label>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${editUseTax ? 'bg-orange-100 text-orange-800' : 'bg-slate-200 text-slate-600'}`}>
+                    {editUseTax ? 'Aktif' : 'Nonaktif'}
+                  </span>
+                </div>
+
+                {editUseTax && (
+                  <div className="space-y-2 pt-2 border-t border-slate-200/60">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">Persentase Pajak (%):</span>
+                      <div className="flex items-center gap-1.5">
+                        {[10, 11, 12].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setEditTaxPercent(pct)}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition ${
+                              Number(editTaxPercent) === pct
+                                ? 'bg-orange-600 text-white border-orange-600'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={editTaxPercent}
+                        onChange={(e) => setEditTaxPercent(e.target.value)}
+                        placeholder="Contoh: 10 atau 11"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-bold text-slate-900 pr-8"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Service Charge / Pajak Tambahan */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={editUseService}
+                      onChange={(e) => setEditUseService(e.target.checked)}
+                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300"
+                    />
+                    <span className="text-xs font-bold text-slate-800">
+                      Service Charge / Biaya Layanan Tambahan
+                    </span>
+                  </label>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${editUseService ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'}`}>
+                    {editUseService ? 'Aktif' : 'Nonaktif'}
+                  </span>
+                </div>
+
+                {editUseService && (
+                  <div className="space-y-2 pt-2 border-t border-slate-200/60">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">Persentase Service (%):</span>
+                      <div className="flex items-center gap-1.5">
+                        {[5, 7, 10].map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setEditServicePercent(pct)}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition ${
+                              Number(editServicePercent) === pct
+                                ? 'bg-amber-600 text-white border-amber-600'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={editServicePercent}
+                        onChange={(e) => setEditServicePercent(e.target.value)}
+                        placeholder="Contoh: 5"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-bold text-slate-900 pr-8"
+                      />
+                      <span className="absolute right-3 top-2 text-xs text-slate-400 font-bold">%</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Pembulatan */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  Metode Pembulatan Tagihan:
+                </label>
+                <select
+                  value={editRounding}
+                  onChange={(e) => setEditRounding(e.target.value as RoundingType)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
+                >
+                  <option value="none">Tanpa Pembulatan</option>
+                  <option value="floor_1000">Sesuai Nota: Bulatkan ke Bawah ke Rp 1.000 (Diskon Kasir)</option>
+                  <option value="floor_500">Sesuai Nota: Bulatkan ke Bawah ke Rp 500</option>
+                  <option value="round_1000">Bulatkan ke Rp 1.000 Terdekat (Matematis)</option>
+                  <option value="ceil_1000">Bulatkan ke Atas ke Rp 1.000</option>
+                </select>
+                <p className="text-[11px] text-slate-500">
+                  Pilih pembulatan sesuai ketentuan kasir pada struk/nota restoran.
+                </p>
+              </div>
+
+              {/* Section 4: Penerapan ke Pesanan */}
+              <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-1.5">
+                <label className="flex items-start gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={recalculateOrdersOption}
+                    onChange={(e) => setRecalculateOrdersOption(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 mt-0.5 shrink-0"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-emerald-900 block">
+                      Terapkan & hitung ulang seluruh tagihan pesanan karyawan ({orders.length} orang)
+                    </span>
+                    <span className="text-[11px] text-emerald-700 leading-relaxed block mt-0.5">
+                      Total tagihan masing-masing anggota kantor (split bill) akan otomatis dihitung ulang menggunakan persentase pajak & pembulatan baru ini.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleCloseTaxModal}
+                  disabled={isSavingTax}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition disabled:opacity-50"
+                >
+                  Batal
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingTax}
+                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSavingTax ? (
+                    <span>Menyimpan...</span>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Simpan Pengaturan Pajak</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

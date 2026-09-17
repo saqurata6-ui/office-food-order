@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { calculateOrder } from '@/lib/calculator';
 
 export async function GET(
   req: NextRequest,
@@ -65,7 +66,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { isLocked, menuItems, taxConfig, adminPin } = body;
+    const { isLocked, menuItems, taxConfig, recalculateOrders = true, adminPin } = body;
 
     if (adminPin && adminPin !== event.adminPin) {
       return NextResponse.json(
@@ -82,14 +83,47 @@ export async function PATCH(
     if (menuItems && Array.isArray(menuItems)) {
       updatedEvent.menuItems = menuItems;
     }
+
+    let updatedOrders = await db.getOrders(event.id);
+
     if (taxConfig) {
-      updatedEvent.taxConfig = taxConfig;
+      updatedEvent.taxConfig = {
+        useTax: Boolean(taxConfig.useTax),
+        taxPercent: Number(taxConfig.taxPercent) || 0,
+        useServiceCharge: Boolean(taxConfig.useServiceCharge),
+        serviceChargePercent: Number(taxConfig.serviceChargePercent) || 0,
+        rounding: taxConfig.rounding || 'none',
+      };
+
+      if (recalculateOrders && updatedOrders.length > 0) {
+        for (const ord of updatedOrders) {
+          const effectiveTaxConfig = {
+            ...updatedEvent.taxConfig,
+            useTax: updatedEvent.taxConfig.useTax,
+          };
+          const calc = calculateOrder(ord.items, effectiveTaxConfig);
+          ord.subtotal = calc.subtotal;
+          ord.taxAmount = calc.taxAmount;
+          ord.serviceAmount = calc.serviceAmount;
+          ord.roundingAmount = calc.roundingAmount;
+          ord.totalAmount = calc.totalAmount;
+
+          if (ord.paymentMethod === 'cash' && ord.paidAmount != null) {
+            ord.changeAmount = Math.max(0, ord.paidAmount - ord.totalAmount);
+          }
+
+          await db.saveOrder(ord);
+        }
+        updatedOrders = await db.getOrders(event.id);
+      }
     }
+
     await db.saveEvent(updatedEvent);
 
     return NextResponse.json({
       success: true,
       data: updatedEvent,
+      orders: updatedOrders,
       message: 'Acara berhasil diperbarui',
     });
   } catch (error) {
