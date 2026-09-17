@@ -5,6 +5,14 @@ import Navbar from "@/components/Navbar";
 export const metadata: Metadata = {
   title: "MakanKantor - Web Pesanan Makan Kantor & Split Bill Otomatis",
   description: "Aplikasi koordinasi makan kantor: input menu manual/OCR AI gambar & PDF, share link pesanan, lock order, dan rekap split-bill otomatis.",
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+  },
 };
 
 export default function RootLayout({
