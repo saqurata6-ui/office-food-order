@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { EventData, UserOrder } from '@/types';
+import { EventData, UserOrder, MenuItem } from '@/types';
 import { formatRupiah, formatIndonesianDate } from './calculator';
 
 export function getGroupedRestaurantOrders(
@@ -251,30 +251,13 @@ export function exportToPdf(event: EventData, orders: UserOrder[]) {
 export function exportToKitchenPdf(event: EventData, orders: UserOrder[]) {
   const doc = new jsPDF();
 
-  // Helper untuk deteksi minuman berdasarkan kategori atau nama menu
-  const isDrink = (menuItemId: string, menuName: string): boolean => {
-    const foundItem = event.menuItems?.find((m) => m.id === menuItemId);
-    const category = (foundItem?.category || '').toLowerCase();
-    const name = (menuName || foundItem?.name || '').toLowerCase();
-
-    if (category.includes('minum') || category.includes('drink') || category.includes('beverage')) {
-      return true;
-    }
-    // Fallback deteksi dari kata kunci nama menu jika kategorinya tidak spesifik
-    const drinkKeywords = [
-      'es ', 'es-', 'es.', 'teh', 'kopi', 'coffee', 'jeruk', 'lemon', 'air mineral', 'mineral',
-      'juice', 'jus', 'susu', 'boba', 'latte', 'cappuccino', 'syrup', 'sirup', 'wedang', 'jahe', 'liang teh'
-    ];
-    return drinkKeywords.some((kw) => name.includes(kw));
-  };
-
-  // Kumpulkan pesanan makanan & minuman
+  // Kumpulkan pesanan makanan & minuman menggunakan isBeverageItem yang akurat
   const foodMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
   const drinkMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
 
   orders.forEach((order) => {
     order.items.forEach((item) => {
-      const isBeverage = isDrink(item.menuItemId, item.menuItemName);
+      const isBeverage = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || []);
       const targetMap = isBeverage ? drinkMap : foodMap;
 
       if (!targetMap[item.menuItemId]) {
@@ -398,39 +381,62 @@ export function exportToKitchenPdf(event: EventData, orders: UserOrder[]) {
   doc.save(filename);
 }
 
+// Helper universal untuk mendeteksi apakah suatu item tergolong Minuman atau Makanan
+// Prioritas: 1) Kategori resmi di menuItem, 2) Kata kunci kategori, 3) Kata kunci nama item
+export function isBeverageItem(menuItemId: string, menuName: string, menuItems: MenuItem[] = []): boolean {
+  // 1. Cek dari daftar menu acara berdasarkan ID atau kecocokan nama
+  const foundItem = menuItems.find(
+    (m) => m.id === menuItemId || m.name.toLowerCase().trim() === menuName.toLowerCase().trim()
+  );
+  const cat = (foundItem?.category || '').toLowerCase().trim();
+  const name = (menuName || foundItem?.name || '').toLowerCase().trim();
+
+  // Jika kategorinya jelas menyebut Minuman / Drink / Beverage
+  if (cat.includes('minum') || cat.includes('drink') || cat.includes('beverage')) {
+    return true;
+  }
+  // Jika kategorinya jelas menyebut Makanan / Sate / Gorengan / Snack / Cemilan / Paket / Lauk / Nasi
+  if (
+    cat.includes('makan') ||
+    cat.includes('sate') ||
+    cat.includes('goreng') ||
+    cat.includes('snack') ||
+    cat.includes('cemil') ||
+    cat.includes('paket') ||
+    cat.includes('lauk') ||
+    cat.includes('nasi') ||
+    cat.includes('mie') ||
+    cat.includes('soto')
+  ) {
+    return false;
+  }
+
+  // 2. Fallback deteksi dari kata kunci nama menu (hanya jika kategorinya 'Lainnya' atau kosong)
+  const drinkKeywords = [
+    'es ', 'es-', 'es.', ' ice ', 'ice ', 'teh', 'tea', 'kopi', 'coffee',
+    'jeruk', 'lemon', 'air mineral', 'mineral', 'aqua', 'le minerale',
+    'juice', 'jus', 'susu', 'milk', 'boba', 'latte', 'cappuccino', 'syrup',
+    'sirup', 'wedang', 'jahe', 'liang teh', 'soda', 'coca', 'fanta', 'sprite'
+  ];
+  return drinkKeywords.some((kw) => name.includes(kw));
+}
+
 // Rekap PDF Format Sejajar 1/2 A4 Landscape (Ukuran 210mm x 148.5mm / A5 Landscape)
-// 2 Kolom Sejajar: Kolom Kiri Makanan & Kolom Kanan Minuman, Subtotal masing-masing, dan Grand Total Item
+// Didesain bersih, tajam, dan presisi tinggi sesuai template HTML cetak
 export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]) {
-  // Ukuran 1/2 A4 Landscape = 210mm x 148.5mm (A5 Landscape)
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
     format: [148.5, 210], // height: 148.5mm, width: 210mm
   });
 
-  // Helper untuk deteksi minuman berdasarkan kategori atau nama menu
-  const isDrink = (menuItemId: string, menuName: string): boolean => {
-    const foundItem = event.menuItems?.find((m) => m.id === menuItemId);
-    const category = (foundItem?.category || '').toLowerCase();
-    const name = (menuName || foundItem?.name || '').toLowerCase();
-
-    if (category.includes('minum') || category.includes('drink') || category.includes('beverage')) {
-      return true;
-    }
-    const drinkKeywords = [
-      'es ', 'es-', 'es.', 'teh', 'kopi', 'coffee', 'jeruk', 'lemon', 'air mineral', 'mineral',
-      'juice', 'jus', 'susu', 'boba', 'latte', 'cappuccino', 'syrup', 'sirup', 'wedang', 'jahe', 'liang teh'
-    ];
-    return drinkKeywords.some((kw) => name.includes(kw));
-  };
-
-  // Kelompokkan menu makanan & minuman
+  // Kelompokkan menu makanan & minuman menggunakan isBeverageItem yang akurat
   const foodMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
   const drinkMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
 
   orders.forEach((order) => {
     order.items.forEach((item) => {
-      const isBeverage = isDrink(item.menuItemId, item.menuItemName);
+      const isBeverage = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || []);
       const targetMap = isBeverage ? drinkMap : foodMap;
 
       if (!targetMap[item.menuItemId]) {
@@ -456,12 +462,12 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
 
   const pageWidth = 210;
   const pageHeight = 148.5;
-  const margin = 8;
-  const contentWidth = pageWidth - margin * 2; // 194mm
-  const colGap = 6;
-  const colWidth = (contentWidth - colGap) / 2; // 94mm
+  const margin = 10;
+  const contentWidth = pageWidth - margin * 2; // 190mm
+  const colGap = 8;
+  const colWidth = (contentWidth - colGap) / 2; // 91mm
 
-  // 1. Header
+  // 1. Header Utama
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
   doc.setTextColor(15, 23, 42); // #0f172a
@@ -470,43 +476,43 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139); // #64748b
-  const subtitle = event.restaurantName ? `FORMAT KATEGORI SEJAJAR • ${event.restaurantName.toUpperCase()}` : 'FORMAT KATEGORI SEJAJAR';
+  const subtitle = event.restaurantName
+    ? `FORMAT KATEGORI SEJAJAR • ${event.restaurantName.toUpperCase()}`
+    : 'FORMAT KATEGORI SEJAJAR';
   doc.text(subtitle, pageWidth - margin, 13, { align: 'right' });
 
-  // Border garis bawah header (2px ≈ 0.6mm)
+  // Border garis bawah header
   doc.setDrawColor(15, 23, 42);
   doc.setLineWidth(0.6);
   doc.line(margin, 16, pageWidth - margin, 16);
 
   const tableStartY = 19;
 
-  // Format baris makanan
+  // Format data baris makanan
   const foodBody = foodList.map((item) => {
     let text = item.name;
     if (item.notes && item.notes.length > 0) {
-      text += `\n` + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
+      text += '\n' + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
     }
     return [text, `${item.totalQty}`];
   });
-
   if (foodBody.length === 0) {
     foodBody.push(['(Tidak ada pesanan makanan)', '-']);
   }
 
-  // Format baris minuman
+  // Format data baris minuman
   const drinkBody = drinkList.map((item) => {
     let text = item.name;
     if (item.notes && item.notes.length > 0) {
-      text += `\n` + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
+      text += '\n' + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
     }
     return [text, `${item.totalQty}`];
   });
-
   if (drinkBody.length === 0) {
     drinkBody.push(['(Tidak ada pesanan minuman)', '-']);
   }
 
-  // AutoTable Kolom 1: MAKANAN
+  // Tabel Kolom 1: MAKANAN
   autoTable(doc, {
     startY: tableStartY,
     margin: { left: margin, right: pageWidth - margin - colWidth },
@@ -516,37 +522,36 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
     foot: [['TOTAL MAKANAN', `${totalFoodQty}`]],
     theme: 'plain',
     headStyles: {
-      fillColor: [30, 41, 59], // #1e293b Dark Navy
+      fillColor: [30, 41, 59], // #1e293b
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8.5,
       halign: 'left',
-      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      cellPadding: { top: 2.2, bottom: 2.2, left: 3, right: 3 },
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 8.5,
       textColor: [30, 41, 59],
-      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
       lineColor: [241, 245, 249],
       lineWidth: { bottom: 0.2 },
     },
     footStyles: {
-      fillColor: [248, 250, 252], // #f8fafc
-      textColor: [71, 85, 105], // #475569
+      fillColor: [248, 250, 252],
+      textColor: [71, 85, 105],
       fontStyle: 'bold',
       fontSize: 8.5,
-      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
       lineColor: [203, 213, 225],
-      lineWidth: { top: 0.4 },
+      lineWidth: { top: 0.5 },
     },
     columnStyles: {
       0: { cellWidth: colWidth - 16, halign: 'left' },
       1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
     },
     didDrawCell: (data) => {
-      // Highlight Qty badge style in body
+      // Style badge kotak jumlah rapi
       if (data.section === 'body' && data.column.index === 1 && data.cell.raw !== '-') {
-        // Draw small badge background box
         const x = data.cell.x + 2.5;
         const y = data.cell.y + 1;
         const w = data.cell.width - 5;
@@ -555,7 +560,6 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
         doc.setDrawColor(203, 213, 225);
         doc.setLineWidth(0.2);
         doc.roundedRect(x, y, w, h, 1, 1, 'FD');
-        // Redraw text over the badge
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
         doc.setTextColor(15, 23, 42);
@@ -568,13 +572,13 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
 
   const finalYFood = (doc as any).lastAutoTable.finalY || 100;
 
-  // Garis pemisah vertikal antar 2 kolom
+  // Garis vertikal pembatas kolom
   const col2Left = margin + colWidth + colGap;
   doc.setDrawColor(226, 232, 240); // #e2e8f0
   doc.setLineWidth(0.3);
-  doc.line(col2Left - colGap / 2, tableStartY, col2Left - colGap / 2, Math.max(finalYFood, 128));
+  doc.line(col2Left - colGap / 2, tableStartY, col2Left - colGap / 2, Math.max(finalYFood, 125));
 
-  // AutoTable Kolom 2: MINUMAN
+  // Tabel Kolom 2: MINUMAN
   autoTable(doc, {
     startY: tableStartY,
     margin: { left: col2Left, right: margin },
@@ -584,35 +588,34 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
     foot: [['TOTAL MINUMAN', `${totalDrinkQty}`]],
     theme: 'plain',
     headStyles: {
-      fillColor: [3, 105, 161], // #0369a1 Sky Blue
+      fillColor: [3, 105, 161], // #0369a1
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8.5,
       halign: 'left',
-      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      cellPadding: { top: 2.2, bottom: 2.2, left: 3, right: 3 },
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 8.5,
       textColor: [30, 41, 59],
-      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
       lineColor: [241, 245, 249],
       lineWidth: { bottom: 0.2 },
     },
     footStyles: {
-      fillColor: [248, 250, 252], // #f8fafc
-      textColor: [71, 85, 105], // #475569
+      fillColor: [248, 250, 252],
+      textColor: [71, 85, 105],
       fontStyle: 'bold',
       fontSize: 8.5,
-      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
       lineColor: [203, 213, 225],
-      lineWidth: { top: 0.4 },
+      lineWidth: { top: 0.5 },
     },
     columnStyles: {
       0: { cellWidth: colWidth - 16, halign: 'left' },
       1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
     },
     didDrawCell: (data) => {
-      // Highlight Qty badge style in body
       if (data.section === 'body' && data.column.index === 1 && data.cell.raw !== '-') {
         const x = data.cell.x + 2.5;
         const y = data.cell.y + 1;
@@ -632,15 +635,15 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
     },
   });
 
-  // 3. Footer Grand Total di bagian bawah
-  const footerY = pageHeight - 11;
+  // Footer Grand Total
+  const footerY = pageHeight - 12;
   doc.setDrawColor(15, 23, 42);
   doc.setLineWidth(0.5);
   doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139); // #64748b
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
   doc.text('REKAPITULASI AKHIR PESANAN', margin, footerY + 2.5);
 
   const totalLabel = 'TOTAL ITEM:';
@@ -650,8 +653,8 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   const badgeX = pageWidth - margin - 16;
   doc.text(totalLabel, badgeX - 3, footerY + 2.5, { align: 'right' });
 
-  // Dark badge for grand total number
-  doc.setFillColor(15, 23, 42); // #0f172a
+  // Dark badge
+  doc.setFillColor(15, 23, 42);
   doc.roundedRect(badgeX, footerY - 1.5, 16, 6, 1, 1, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
@@ -661,6 +664,333 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   const cleanResto = (event.restaurantName || 'Resto').replace(/[^a-zA-Z0-9]/g, '_');
   const filename = `Rekap_Sejajar_${cleanResto}_${event.date}.pdf`;
   doc.save(filename);
+}
+
+// Fitur Cetak / Preview HTML Landscape 1/2 A4 (100% Presisi Pixel Sesuai Template Desain)
+export function printLandscapeHalfA4Html(event: EventData, orders: UserOrder[]) {
+  const foodMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
+  const drinkMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
+
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      const isBeverage = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || []);
+      const targetMap = isBeverage ? drinkMap : foodMap;
+
+      if (!targetMap[item.menuItemId]) {
+        targetMap[item.menuItemId] = {
+          name: item.menuItemName,
+          totalQty: 0,
+          notes: [],
+        };
+      }
+      targetMap[item.menuItemId].totalQty += item.quantity;
+      if (item.notes && item.notes.trim()) {
+        targetMap[item.menuItemId].notes.push(item.notes.trim());
+      }
+    });
+  });
+
+  const foodList = Object.values(foodMap);
+  const drinkList = Object.values(drinkMap);
+  const totalFoodQty = foodList.reduce((sum, it) => sum + it.totalQty, 0);
+  const totalDrinkQty = drinkList.reduce((sum, it) => sum + it.totalQty, 0);
+  const grandTotalQty = totalFoodQty + totalDrinkQty;
+
+  const foodRowsHtml = foodList.length > 0
+    ? foodList.map((it) => `
+      <tr>
+        <td class="col-name">
+          <div class="item-name">${it.name}</div>
+          ${it.notes.length > 0 ? it.notes.map((n) => `<div class="item-note"><span class="arrow">↳</span>Catatan: <em>${n}</em></div>`).join('') : ''}
+        </td>
+        <td class="col-qty">
+          <span class="qty-badge">${it.totalQty}</span>
+        </td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="2" style="padding: 10px 0; color: #94a3b8; text-align: center;">(Tidak ada pesanan makanan)</td></tr>`;
+
+  const drinkRowsHtml = drinkList.length > 0
+    ? drinkList.map((it) => `
+      <tr>
+        <td class="col-name">
+          <div class="item-name">${it.name}</div>
+          ${it.notes.length > 0 ? it.notes.map((n) => `<div class="item-note"><span class="arrow">↳</span>Catatan: <em>${n}</em></div>`).join('') : ''}
+        </td>
+        <td class="col-qty">
+          <span class="qty-badge">${it.totalQty}</span>
+        </td>
+      </tr>
+    `).join('')
+    : `<tr><td colspan="2" style="padding: 10px 0; color: #94a3b8; text-align: center;">(Tidak ada pesanan minuman)</td></tr>`;
+
+  const htmlContent = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Rekap Pesanan - ${event.restaurantName || event.title}</title>
+  <style>
+    @page {
+      size: 210mm 148.5mm;
+      margin: 5mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      background: #ffffff;
+      padding: 15px;
+    }
+    .rekap-sheet {
+      width: 210mm;
+      min-height: 148.5mm;
+      max-width: 100%;
+      background: #ffffff;
+      margin: 0 auto;
+      padding: 16px 20px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 6px;
+      margin-bottom: 12px;
+    }
+    .header-title {
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: #0f172a;
+    }
+    .header-subtitle {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .category-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .col-makanan {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .col-minuman {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-left: 1px solid #e2e8f0;
+      padding-left: 20px;
+    }
+    .category-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+      color: #ffffff;
+    }
+    .bg-makanan { background-color: #1e293b; }
+    .bg-minuman { background-color: #0369a1; }
+    .item-table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .item-table tr { border-bottom: 1px solid #f1f5f9; }
+    .item-table td { padding: 6px 0; vertical-align: top; }
+    .col-name { width: auto; padding-right: 8px; }
+    .col-qty { width: 50px; text-align: center; }
+    .item-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1e293b;
+      line-height: 1.3;
+    }
+    .item-note {
+      font-size: 10.5px;
+      color: #78350f;
+      font-weight: 500;
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+    .item-note span.arrow {
+      color: #d97706;
+      font-weight: bold;
+      margin-right: 2px;
+    }
+    .qty-badge {
+      display: inline-block;
+      width: 32px;
+      padding: 2px 0;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+    }
+    .subtotal-bar {
+      margin-top: 8px;
+      padding: 5px 10px;
+      background: #f8fafc;
+      border-top: 2px solid #cbd5e1;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+    }
+    .subtotal-val {
+      width: 50px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 900;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+    }
+    .footer {
+      margin-top: 14px;
+      padding-top: 8px;
+      border-top: 2px solid #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .footer-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .grand-total-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .grand-total-text {
+      font-size: 11px;
+      font-weight: 800;
+      color: #1e293b;
+      text-transform: uppercase;
+    }
+    .grand-total-badge {
+      background: #0f172a;
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 900;
+      padding: 3px 12px;
+      border-radius: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    @media print {
+      body { background: transparent !important; padding: 0 !important; }
+      .rekap-sheet {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="rekap-sheet">
+    <div>
+      <div class="header">
+        <div class="header-title">REKAP PESANAN</div>
+        <div class="header-subtitle">${event.restaurantName ? event.restaurantName.toUpperCase() : 'FORMAT KATEGORI SEJAJAR'}</div>
+      </div>
+      <div class="category-grid">
+        <div class="col-makanan">
+          <div>
+            <div class="category-header bg-makanan">
+              <span>MAKANAN</span>
+              <span style="width: 50px; text-align: center;">JUMLAH</span>
+            </div>
+            <table class="item-table">
+              <tbody>
+                ${foodRowsHtml}
+              </tbody>
+            </table>
+          </div>
+          <div class="subtotal-bar">
+            <span>Total Makanan</span>
+            <span class="subtotal-val">${totalFoodQty}</span>
+          </div>
+        </div>
+        <div class="col-minuman">
+          <div>
+            <div class="category-header bg-minuman">
+              <span>MINUMAN</span>
+              <span style="width: 50px; text-align: center;">JUMLAH</span>
+            </div>
+            <table class="item-table">
+              <tbody>
+                ${drinkRowsHtml}
+              </tbody>
+            </table>
+          </div>
+          <div class="subtotal-bar">
+            <span>Total Minuman</span>
+            <span class="subtotal-val">${totalDrinkQty}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">
+      <span class="footer-label">Rekapitulasi Akhir Pesanan</span>
+      <div class="grand-total-box">
+        <span class="grand-total-text">TOTAL ITEM:</span>
+        <span class="grand-total-badge">${grandTotalQty}</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 200);
+    };
+  </script>
+</body>
+</html>`;
+
+  // Buka tab/window baru yang otomatis memicu print browser (dengan layout CSS asli 100%)
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.open();
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  }
 }
 
 export function generateWhatsAppMessage(event: EventData, baseUrl: string) {

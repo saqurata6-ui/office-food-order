@@ -46,6 +46,7 @@ import {
   exportToPdf,
   exportToKitchenPdf,
   exportToLandscapeHalfA4Pdf,
+  printLandscapeHalfA4Html,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -959,7 +960,7 @@ export default function EventAdminPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
 
-                    {/* Opsi 1: Format Baru 1/2 A4 Landscape (2 Kolom Sejajar Makanan & Minuman) */}
+                    {/* Opsi 1: Format Sejajar 1/2 A4 (Download PDF Langsung) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -973,11 +974,34 @@ export default function EventAdminPage() {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Format Sejajar (1/2 A4 Landscape)</span>
-                          <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">Populer</span>
+                          <span>Format Sejajar (Download PDF)</span>
+                          <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">1/2 A4</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          2 kolom berdampingan (Makanan & Minuman), badge jumlah, subtotal & total item.
+                          File .pdf landscape ukuran A5/setengah A4, rapi, kategori akurat & ada total item.
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Opsi 1b: Format Sejajar 1/2 A4 (Cetak Langsung Presisi HTML) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        printLandscapeHalfA4Html(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group bg-sky-50/30"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-indigo-600 group-hover:text-white transition">
+                        <Printer className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Cetak Struk Sejajar (Presisi HTML)</span>
+                          <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded">100% Desain</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Membuka dialog cetak browser dengan tampilan persis template HTML (Save to PDF / Print).
                         </div>
                       </div>
                     </button>
