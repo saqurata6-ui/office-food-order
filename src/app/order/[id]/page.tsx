@@ -53,6 +53,7 @@ export default function OrderPage() {
   const [previewOrder, setPreviewOrder] = useState<UserOrder | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showTaxEstimate, setShowTaxEstimate] = useState(false);
+  const [lastSavedInfo, setLastSavedInfo] = useState<{ userName: string; totalAmount: number } | null>(null);
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -327,10 +328,19 @@ export default function OrderPage() {
       const savedOrder: UserOrder = json.data;
       const returnedOrders: UserOrder[] = json.orders || [];
 
-      // 1. Masuk ke mode edit pesanan tersimpan milik pemesan ini
-      setExistingOrder(savedOrder);
+      // 1. Simpan info pesanan terakhir untuk banner notifikasi
+      setLastSavedInfo({
+        userName: savedOrder.userName,
+        totalAmount: savedOrder.totalAmount,
+      });
 
-      // 2. Perbarui state orders secara langsung agar chip langsung muncul
+      // 2. Kembalikan form ke mode pesanan baru (new order)
+      setExistingOrder(null);
+      setUserName('');
+      setSelectedItems({});
+      setShowBreakdown(false);
+
+      // 3. Perbarui state orders secara langsung agar chip nama langsung muncul
       if (returnedOrders.length > 0) {
         setOrders(returnedOrders);
       } else {
@@ -942,12 +952,14 @@ export default function OrderPage() {
       </div>
 
       {/* Success Notification Banner */}
-      {submitSuccess && (
+      {submitSuccess && lastSavedInfo && (
         <div className="fixed top-5 left-4 right-4 max-w-md mx-auto z-50 p-4 bg-emerald-600 text-white rounded-2xl shadow-xl flex items-center gap-3 animate-in slide-in-from-top duration-200">
           <CheckCircle className="w-6 h-6 shrink-0" />
           <div className="flex-1 text-xs">
             <strong className="block text-sm font-bold">Pesanan Berhasil Disimpan!</strong>
-            <span>Total tagihanmu: <strong>{formatRupiah(calculation.totalAmount)}</strong>. Kamu bisa mengedit pesanan ini kapan saja sebelum PIC mengunci pesanan.</span>
+            <span>
+              Pesanan untuk <strong>{lastSavedInfo.userName}</strong> (Total: <strong>{formatRupiah(lastSavedInfo.totalAmount)}</strong>) telah masuk ke daftar. Form telah di-reset untuk pesanan berikutnya, atau klik nama pada chip di atas jika ingin melihat/mengubah menu.
+            </span>
           </div>
         </div>
       )}
