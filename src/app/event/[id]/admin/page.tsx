@@ -811,16 +811,6 @@ export default function EventAdminPage() {
 
             <button
               type="button"
-              onClick={handleOpenTaxModal}
-              className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 transition border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 text-slate-800 shadow-2xs"
-              title="Ubah persentase PPN, service charge, atau pembulatan nota"
-            >
-              <SlidersHorizontal className="w-4 h-4 text-orange-600 shrink-0" />
-              <span>Setting Pajak / PPN</span>
-            </button>
-
-            <button
-              type="button"
               onClick={handleToggleLock}
               className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition shadow-sm ${
                 event.isLocked
@@ -2196,24 +2186,84 @@ export default function EventAdminPage() {
               </div>
 
               {/* Section 3: Pembulatan */}
-              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
-                <label className="block text-xs font-bold text-slate-800">
-                  Metode Pembulatan Tagihan:
-                </label>
-                <select
-                  value={editRounding}
-                  onChange={(e) => setEditRounding(e.target.value as RoundingType)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs bg-white focus:ring-2 focus:ring-orange-500 font-medium"
-                >
-                  <option value="none">Tanpa Pembulatan</option>
-                  <option value="floor_1000">Sesuai Nota: Bulatkan ke Bawah ke Rp 1.000 (Diskon Kasir)</option>
-                  <option value="floor_500">Sesuai Nota: Bulatkan ke Bawah ke Rp 500</option>
-                  <option value="round_1000">Bulatkan ke Rp 1.000 Terdekat (Matematis)</option>
-                  <option value="ceil_1000">Bulatkan ke Atas ke Rp 1.000</option>
-                </select>
-                <p className="text-[11px] text-slate-500">
-                  Pilih pembulatan sesuai ketentuan kasir pada struk/nota restoran.
-                </p>
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-900">
+                    Aturan Pembulatan (Rounding)
+                  </label>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Pilih aturan pembulatan untuk menyesuaikan dengan nota kasir restoran Anda:
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    {
+                      value: 'floor_1000',
+                      badge: 'Sesuai Nota Resto',
+                      label: 'Bulatkan ke Bawah ke Rp 1.000 (Diskon Sisa)',
+                      sub: 'Contoh di nota: Rp 206.250 ➔ Rp 206.000 (-Rp 250)',
+                    },
+                    {
+                      value: 'floor_500',
+                      badge: 'Sesuai Nota Resto',
+                      label: 'Bulatkan ke Bawah ke Rp 500',
+                      sub: 'Contoh: Rp 206.250 ➔ Rp 206.000 (-Rp 250)',
+                    },
+                    {
+                      value: 'round_1000',
+                      badge: 'Matematis',
+                      label: 'Bulatkan ke Rp 1.000 Terdekat (Bisa +/-)',
+                      sub: 'Rp 206.250 ➔ Rp 206.000 | Rp 206.750 ➔ Rp 207.000',
+                    },
+                    {
+                      value: 'ceil_1000',
+                      badge: 'Ke Atas',
+                      label: 'Bulatkan ke Atas ke Rp 1.000',
+                      sub: 'Rp 206.250 ➔ Rp 207.000 (+Rp 750)',
+                    },
+                    {
+                      value: 'none',
+                      badge: 'Standard',
+                      label: 'Tanpa Pembulatan',
+                      sub: 'Nominal asli tanpa perubahan: Rp 206.250',
+                    },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setEditRounding(opt.value as RoundingType)}
+                      className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                        editRounding === opt.value
+                          ? 'border-orange-500 bg-orange-50/60 shadow-xs ring-1 ring-orange-500'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className={`text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                            opt.badge === 'Sesuai Nota Resto'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : opt.badge === 'Matematis'
+                              ? 'bg-blue-100 text-blue-800'
+                              : opt.badge === 'Ke Atas'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {opt.badge}
+                        </span>
+                        {editRounding === opt.value && (
+                          <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-bold text-slate-800 leading-snug">
+                        {opt.label}
+                      </span>
+                      <span className="text-[10px] text-slate-500 mt-1 leading-tight">{opt.sub}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Section 4: Penerapan ke Pesanan */}
