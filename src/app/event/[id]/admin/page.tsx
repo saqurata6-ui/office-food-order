@@ -37,16 +37,13 @@ import {
   RotateCcw,
   ChefHat,
   ChevronDown,
-  Columns2,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
 import {
   exportToExcel,
   exportToPdf,
-  exportToKitchenPdf,
-  exportToLandscapeHalfA4Pdf,
-  printLandscapeHalfA4Html,
+  exportToCategoryPdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -960,59 +957,11 @@ export default function EventAdminPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
 
-                    {/* Opsi 1: Format Sejajar 1/2 A4 (Download PDF Langsung) */}
+                    {/* Opsi 1: Rekap Pesanan per Kategori Menu (Ringkas, Clean, Tanpa Harga) */}
                     <button
                       type="button"
                       onClick={() => {
-                        exportToLandscapeHalfA4Pdf(event, orders);
-                        setIsPdfDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-sky-600 group-hover:text-white transition">
-                        <Columns2 className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Format Sejajar (Download PDF)</span>
-                          <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">1/2 A4</span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          File .pdf landscape ukuran A5/setengah A4, rapi, kategori akurat & ada total item.
-                        </div>
-                      </div>
-                    </button>
-
-                    {/* Opsi 1b: Format Sejajar 1/2 A4 (Cetak Langsung Presisi HTML) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        printLandscapeHalfA4Html(event, orders);
-                        setIsPdfDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group bg-sky-50/30"
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-indigo-600 group-hover:text-white transition">
-                        <Printer className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Cetak Struk Sejajar (Presisi HTML)</span>
-                          <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 text-[9px] font-bold rounded">100% Desain</span>
-                        </div>
-                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Membuka dialog cetak browser dengan tampilan persis template HTML (Save to PDF / Print).
-                        </div>
-                      </div>
-                    </button>
-
-                    <div className="h-px bg-slate-100 my-1" />
-
-                    {/* Opsi 2: Format Dapur Standar (A4 Vertikal) */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        exportToKitchenPdf(event, orders);
+                        exportToCategoryPdf(event, orders);
                         setIsPdfDropdownOpen(false);
                       }}
                       className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
@@ -1022,17 +971,18 @@ export default function EventAdminPage() {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Daftar Pesanan Dapur (A4 Vertikal)</span>
+                          <span>Rekap Pesanan per Kategori</span>
+                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Porsi & Catatan</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Tabel vertikal atas-bawah (Makanan lalu Minuman), format <b>3x</b> tanpa harga.
+                          Format clean & simple tanpa harga, dikelompokkan rapi berdasarkan kategori menu acara.
                         </div>
                       </div>
                     </button>
 
                     <div className="h-px bg-slate-100 my-1" />
 
-                    {/* Opsi 3: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
+                    {/* Opsi 2: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1045,11 +995,12 @@ export default function EventAdminPage() {
                         <FileText className="w-4 h-4" />
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-slate-800">
-                          Rekap Lengkap (Office & Split Bill)
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Rekap Lengkap (Split Bill)</span>
+                          <span className="px-1.5 py-0.2 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">Versi Lama</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Tabel pesanan resto dengan harga & rekap split-bill per karyawan.
+                          Tabel resto lengkap dengan rincian harga, PPN, dan rincian tagihan split bill per karyawan.
                         </div>
                       </div>
                     </button>
