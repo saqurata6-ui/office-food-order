@@ -145,25 +145,12 @@ export default function EventAdminPage() {
 
       setEvent(json.data);
       const serverOrders: UserOrder[] = json.orders || [];
+      setOrders(serverOrders);
 
-      // Gabungkan dengan backup pesanan lokal jika serverless dingin
+      // Simpan backup sinkronisasi pesanan ke localStorage
       try {
-        const localOrdersRaw = localStorage.getItem(`makan_kantor_orders_${eventId}`);
-        const localList: UserOrder[] = localOrdersRaw ? JSON.parse(localOrdersRaw) : [];
-        const merged = [...serverOrders];
-
-        localList.forEach((lo) => {
-          const exists = merged.some(
-            (so) => so.id === lo.id || so.userName.trim().toLowerCase() === lo.userName.trim().toLowerCase()
-          );
-          if (!exists) {
-            merged.push(lo);
-          }
-        });
-        setOrders(merged);
-      } catch (e) {
-        setOrders(serverOrders);
-      }
+        localStorage.setItem(`makan_kantor_orders_${eventId}`, JSON.stringify(serverOrders));
+      } catch (e) {}
 
       if (json.isAdmin || pinParam === json.data.adminPin) {
         setIsPinAuthenticated(true);
@@ -423,10 +410,24 @@ export default function EventAdminPage() {
 
       const json = await res.json();
       if (json.success) {
-        setOrders((prev) => prev.filter((o) => o.id !== orderId));
+        const remaining = json.orders || [];
+        setOrders(remaining);
+        try {
+          localStorage.setItem(`makan_kantor_orders_${eventId}`, JSON.stringify(remaining));
+          const myOrder = localStorage.getItem(`makan_kantor_order_${eventId}`);
+          if (myOrder) {
+            const parsed = JSON.parse(myOrder);
+            if (parsed.id === orderId) {
+              localStorage.removeItem(`makan_kantor_order_${eventId}`);
+            }
+          }
+        } catch (e) {}
+      } else {
+        alert(json.message || 'Gagal menghapus pesanan.');
       }
     } catch (err) {
       console.error(err);
+      alert('Terjadi kesalahan koneksi saat menghapus pesanan.');
     }
   };
 

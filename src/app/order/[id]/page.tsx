@@ -87,36 +87,16 @@ export default function OrderPage() {
       } else {
         setEvent(json.data);
         const serverOrders: UserOrder[] = json.orders || [];
+        setOrders(serverOrders);
 
-        // Gabungkan dengan backup pesanan lokal jika serverless dingin
         try {
-          const localOrdersRaw = localStorage.getItem(`makan_kantor_orders_${eventId}`);
-          const localList: UserOrder[] = localOrdersRaw ? JSON.parse(localOrdersRaw) : [];
-          const merged = [...serverOrders];
-
-          localList.forEach((lo) => {
-            const exists = merged.some(
-              (so) => so.id === lo.id || normalizeName(so.userName) === normalizeName(lo.userName)
-            );
-            if (!exists) {
-              merged.push(lo);
-              // Sinkronkan ke server secara background jika belum ada di server
-              fetch(`/api/events/${eventId}/orders`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  userName: lo.userName,
-                  items: lo.items,
-                  orderId: lo.id,
-                  includeTax: lo.taxAmount > 0,
-                }),
-              }).catch(() => {});
-            }
-          });
-          setOrders(merged);
-        } catch (e) {
-          setOrders(serverOrders);
-        }
+          localStorage.setItem(`makan_kantor_orders_${eventId}`, JSON.stringify(serverOrders));
+          // Jika pesanan milik pemesan ini telah dihapus oleh PIC, lepaskan existingOrder
+          if (existingOrder && !serverOrders.some((so) => so.id === existingOrder.id)) {
+            setExistingOrder(null);
+            localStorage.removeItem(`makan_kantor_order_${eventId}`);
+          }
+        } catch (e) {}
       }
     } catch (err) {
       console.error(err);

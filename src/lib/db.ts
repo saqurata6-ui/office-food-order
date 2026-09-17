@@ -295,19 +295,9 @@ export const db = {
             updatedAt: d.updated_at,
           }));
 
-          if (sbOrders.length > 0) {
-            cache.orders[cleanId] = sbOrders;
-            saveDb(cache);
-            return sbOrders;
-          } else if (localOrders.length > 0) {
-            // Supabase is empty but local cache has orders:
-            // Sync local orders to Supabase so they don't get lost
-            for (const ord of localOrders) {
-              this.saveOrder(ord).catch(() => {});
-            }
-            return localOrders;
-          }
-          return [];
+          cache.orders[cleanId] = sbOrders;
+          saveDb(cache);
+          return sbOrders;
         }
       } catch (sbErr) {
         console.error('Supabase getOrders error:', sbErr);
@@ -467,18 +457,23 @@ export const db = {
 
     if (supabase) {
       try {
-        await supabase.from('orders').delete().eq('id', orderId);
+        const { error } = await supabase.from('orders').delete().eq('id', orderId);
+        if (error) {
+          console.error('Supabase deleteOrder error:', error);
+        }
       } catch (sbErr) {
-        console.error('Supabase deleteOrder error:', sbErr);
+        console.error('Supabase deleteOrder exception:', sbErr);
       }
     }
 
     const cache = getCache();
-    const list = cache.orders[cleanEventId] || cache.orders[eventId];
-    if (list) {
-      cache.orders[cleanEventId] = list.filter((o) => o.id !== orderId);
-      saveDb(cache);
+    if (cache.orders[cleanEventId]) {
+      cache.orders[cleanEventId] = cache.orders[cleanEventId].filter((o) => o.id !== orderId);
     }
+    if (cache.orders[eventId]) {
+      cache.orders[eventId] = cache.orders[eventId].filter((o) => o.id !== orderId);
+    }
+    saveDb(cache);
 
     return true;
   }
