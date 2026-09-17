@@ -398,6 +398,271 @@ export function exportToKitchenPdf(event: EventData, orders: UserOrder[]) {
   doc.save(filename);
 }
 
+// Rekap PDF Format Sejajar 1/2 A4 Landscape (Ukuran 210mm x 148.5mm / A5 Landscape)
+// 2 Kolom Sejajar: Kolom Kiri Makanan & Kolom Kanan Minuman, Subtotal masing-masing, dan Grand Total Item
+export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]) {
+  // Ukuran 1/2 A4 Landscape = 210mm x 148.5mm (A5 Landscape)
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: [148.5, 210], // height: 148.5mm, width: 210mm
+  });
+
+  // Helper untuk deteksi minuman berdasarkan kategori atau nama menu
+  const isDrink = (menuItemId: string, menuName: string): boolean => {
+    const foundItem = event.menuItems?.find((m) => m.id === menuItemId);
+    const category = (foundItem?.category || '').toLowerCase();
+    const name = (menuName || foundItem?.name || '').toLowerCase();
+
+    if (category.includes('minum') || category.includes('drink') || category.includes('beverage')) {
+      return true;
+    }
+    const drinkKeywords = [
+      'es ', 'es-', 'es.', 'teh', 'kopi', 'coffee', 'jeruk', 'lemon', 'air mineral', 'mineral',
+      'juice', 'jus', 'susu', 'boba', 'latte', 'cappuccino', 'syrup', 'sirup', 'wedang', 'jahe', 'liang teh'
+    ];
+    return drinkKeywords.some((kw) => name.includes(kw));
+  };
+
+  // Kelompokkan menu makanan & minuman
+  const foodMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
+  const drinkMap: Record<string, { name: string; totalQty: number; notes: string[] }> = {};
+
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      const isBeverage = isDrink(item.menuItemId, item.menuItemName);
+      const targetMap = isBeverage ? drinkMap : foodMap;
+
+      if (!targetMap[item.menuItemId]) {
+        targetMap[item.menuItemId] = {
+          name: item.menuItemName,
+          totalQty: 0,
+          notes: [],
+        };
+      }
+      targetMap[item.menuItemId].totalQty += item.quantity;
+      if (item.notes && item.notes.trim()) {
+        targetMap[item.menuItemId].notes.push(item.notes.trim());
+      }
+    });
+  });
+
+  const foodList = Object.values(foodMap);
+  const drinkList = Object.values(drinkMap);
+
+  const totalFoodQty = foodList.reduce((sum, it) => sum + it.totalQty, 0);
+  const totalDrinkQty = drinkList.reduce((sum, it) => sum + it.totalQty, 0);
+  const grandTotalQty = totalFoodQty + totalDrinkQty;
+
+  const pageWidth = 210;
+  const pageHeight = 148.5;
+  const margin = 8;
+  const contentWidth = pageWidth - margin * 2; // 194mm
+  const colGap = 6;
+  const colWidth = (contentWidth - colGap) / 2; // 94mm
+
+  // 1. Header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42); // #0f172a
+  doc.text('REKAP PESANAN', margin, 13);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139); // #64748b
+  const subtitle = event.restaurantName ? `FORMAT KATEGORI SEJAJAR • ${event.restaurantName.toUpperCase()}` : 'FORMAT KATEGORI SEJAJAR';
+  doc.text(subtitle, pageWidth - margin, 13, { align: 'right' });
+
+  // Border garis bawah header (2px ≈ 0.6mm)
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.6);
+  doc.line(margin, 16, pageWidth - margin, 16);
+
+  const tableStartY = 19;
+
+  // Format baris makanan
+  const foodBody = foodList.map((item) => {
+    let text = item.name;
+    if (item.notes && item.notes.length > 0) {
+      text += `\n` + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
+    }
+    return [text, `${item.totalQty}`];
+  });
+
+  if (foodBody.length === 0) {
+    foodBody.push(['(Tidak ada pesanan makanan)', '-']);
+  }
+
+  // Format baris minuman
+  const drinkBody = drinkList.map((item) => {
+    let text = item.name;
+    if (item.notes && item.notes.length > 0) {
+      text += `\n` + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
+    }
+    return [text, `${item.totalQty}`];
+  });
+
+  if (drinkBody.length === 0) {
+    drinkBody.push(['(Tidak ada pesanan minuman)', '-']);
+  }
+
+  // AutoTable Kolom 1: MAKANAN
+  autoTable(doc, {
+    startY: tableStartY,
+    margin: { left: margin, right: pageWidth - margin - colWidth },
+    tableWidth: colWidth,
+    head: [['MAKANAN', 'JUMLAH']],
+    body: foodBody,
+    foot: [['TOTAL MAKANAN', `${totalFoodQty}`]],
+    theme: 'plain',
+    headStyles: {
+      fillColor: [30, 41, 59], // #1e293b Dark Navy
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      halign: 'left',
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [30, 41, 59],
+      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      lineColor: [241, 245, 249],
+      lineWidth: { bottom: 0.2 },
+    },
+    footStyles: {
+      fillColor: [248, 250, 252], // #f8fafc
+      textColor: [71, 85, 105], // #475569
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      lineColor: [203, 213, 225],
+      lineWidth: { top: 0.4 },
+    },
+    columnStyles: {
+      0: { cellWidth: colWidth - 16, halign: 'left' },
+      1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+    },
+    didDrawCell: (data) => {
+      // Highlight Qty badge style in body
+      if (data.section === 'body' && data.column.index === 1 && data.cell.raw !== '-') {
+        // Draw small badge background box
+        const x = data.cell.x + 2.5;
+        const y = data.cell.y + 1;
+        const w = data.cell.width - 5;
+        const h = data.cell.height - 2;
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(x, y, w, h, 1, 1, 'FD');
+        // Redraw text over the badge
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(String(data.cell.raw), data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 1.2, {
+          align: 'center',
+        });
+      }
+    },
+  });
+
+  const finalYFood = (doc as any).lastAutoTable.finalY || 100;
+
+  // Garis pemisah vertikal antar 2 kolom
+  const col2Left = margin + colWidth + colGap;
+  doc.setDrawColor(226, 232, 240); // #e2e8f0
+  doc.setLineWidth(0.3);
+  doc.line(col2Left - colGap / 2, tableStartY, col2Left - colGap / 2, Math.max(finalYFood, 128));
+
+  // AutoTable Kolom 2: MINUMAN
+  autoTable(doc, {
+    startY: tableStartY,
+    margin: { left: col2Left, right: margin },
+    tableWidth: colWidth,
+    head: [['MINUMAN', 'JUMLAH']],
+    body: drinkBody,
+    foot: [['TOTAL MINUMAN', `${totalDrinkQty}`]],
+    theme: 'plain',
+    headStyles: {
+      fillColor: [3, 105, 161], // #0369a1 Sky Blue
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      halign: 'left',
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+    },
+    bodyStyles: {
+      fontSize: 8,
+      textColor: [30, 41, 59],
+      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      lineColor: [241, 245, 249],
+      lineWidth: { bottom: 0.2 },
+    },
+    footStyles: {
+      fillColor: [248, 250, 252], // #f8fafc
+      textColor: [71, 85, 105], // #475569
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      cellPadding: { top: 2, bottom: 2, left: 3, right: 3 },
+      lineColor: [203, 213, 225],
+      lineWidth: { top: 0.4 },
+    },
+    columnStyles: {
+      0: { cellWidth: colWidth - 16, halign: 'left' },
+      1: { cellWidth: 16, halign: 'center', fontStyle: 'bold' },
+    },
+    didDrawCell: (data) => {
+      // Highlight Qty badge style in body
+      if (data.section === 'body' && data.column.index === 1 && data.cell.raw !== '-') {
+        const x = data.cell.x + 2.5;
+        const y = data.cell.y + 1;
+        const w = data.cell.width - 5;
+        const h = data.cell.height - 2;
+        doc.setFillColor(248, 250, 252);
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.2);
+        doc.roundedRect(x, y, w, h, 1, 1, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(String(data.cell.raw), data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 1.2, {
+          align: 'center',
+        });
+      }
+    },
+  });
+
+  // 3. Footer Grand Total di bagian bawah
+  const footerY = pageHeight - 11;
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.5);
+  doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139); // #64748b
+  doc.text('REKAPITULASI AKHIR PESANAN', margin, footerY + 2.5);
+
+  const totalLabel = 'TOTAL ITEM:';
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(30, 41, 59);
+  const badgeX = pageWidth - margin - 16;
+  doc.text(totalLabel, badgeX - 3, footerY + 2.5, { align: 'right' });
+
+  // Dark badge for grand total number
+  doc.setFillColor(15, 23, 42); // #0f172a
+  doc.roundedRect(badgeX, footerY - 1.5, 16, 6, 1, 1, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text(`${grandTotalQty}`, badgeX + 8, footerY + 2.7, { align: 'center' });
+
+  const cleanResto = (event.restaurantName || 'Resto').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Rekap_Sejajar_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
+}
+
 export function generateWhatsAppMessage(event: EventData, baseUrl: string) {
   const url = `${baseUrl}/order/${event.id}`;
   return `🍱 *Pesanan Makan Kantor: ${event.title}*

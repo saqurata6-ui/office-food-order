@@ -37,6 +37,7 @@ import {
   RotateCcw,
   ChefHat,
   ChevronDown,
+  Columns2,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
@@ -44,6 +45,7 @@ import {
   exportToExcel,
   exportToPdf,
   exportToKitchenPdf,
+  exportToLandscapeHalfA4Pdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -957,7 +959,32 @@ export default function EventAdminPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
 
-                    {/* Format Baru: Dapur / Resto (Hanya Menu, Qty x, Catatan) */}
+                    {/* Opsi 1: Format Baru 1/2 A4 Landscape (2 Kolom Sejajar Makanan & Minuman) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToLandscapeHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-sky-600 group-hover:text-white transition">
+                        <Columns2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Format Sejajar (1/2 A4 Landscape)</span>
+                          <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">Populer</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          2 kolom berdampingan (Makanan & Minuman), badge jumlah, subtotal & total item.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 2: Format Dapur Standar (A4 Vertikal) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -971,18 +998,17 @@ export default function EventAdminPage() {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Daftar Pesanan Dapur / Resto</span>
-                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Baru</span>
+                          <span>Daftar Pesanan Dapur (A4 Vertikal)</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Pisah makanan & minuman, format <b>3x</b>, tanpa harga & tanpa info bayar.
+                          Tabel vertikal atas-bawah (Makanan lalu Minuman), format <b>3x</b> tanpa harga.
                         </div>
                       </div>
                     </button>
 
                     <div className="h-px bg-slate-100 my-1" />
 
-                    {/* Format Lama: Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
+                    {/* Opsi 3: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
                     <button
                       type="button"
                       onClick={() => {
