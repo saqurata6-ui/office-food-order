@@ -551,7 +551,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
-  const subInfo = `${formatIndonesianDate(event.date)} pk ${event.time} WIB | PIC: ${event.picName || '-'}`;
+  const subInfo = `${formatIndonesianDate(event.date)} pk ${event.time} WIB`;
   doc.text(subInfo, pageWidth - margin, 11, { align: 'right' });
 
   // Garis pemisah header
@@ -589,16 +589,22 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
         if (item.notes.length > 0) {
           text += '\n' + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
         }
-        return [text, `${item.totalQty}x`];
+        return [text, `${item.totalQty}`];
       });
 
       autoTable(doc, {
         startY: colY,
         margin: { left: startX, right: pageWidth - startX - colWidth },
         tableWidth: colWidth,
-        head: [[catName.toUpperCase(), `${catTotal}x`]],
+        head: [[
+          { content: catName.toUpperCase(), styles: { halign: 'left' } },
+          { content: '', styles: { halign: 'center' } },
+        ]],
         body: tableRows,
-        foot: [[`Total ${catName}`, `${catTotal}x`]],
+        foot: [[
+          { content: `Total ${catName}`, styles: { halign: 'left', fontStyle: 'bold' } },
+          { content: `${catTotal}`, styles: { halign: 'center', fontStyle: 'bold', textColor: [15, 23, 42] } },
+        ]],
         theme: 'plain',
         headStyles: {
           fillColor: headerColor,
@@ -667,11 +673,6 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.setDrawColor(15, 23, 42);
   doc.setLineWidth(0.4);
   doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(100, 116, 139);
-  doc.text('REKAPITULASI PESANAN 1/2 A4', margin, footerY + 3);
 
   const badgeW = 24;
   const badgeH = 6;
@@ -814,8 +815,8 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(71, 85, 105); // slate-600
-  const picInfo = `PIC: ${event.picName || '-'}${event.title ? ` | Acara: ${event.title}` : ''}`;
-  doc.text(picInfo, pageWidth - margin, currentY, { align: 'right' });
+  const headerSub = event.title ? `Acara: ${event.title}` : '';
+  doc.text(headerSub, pageWidth - margin, currentY, { align: 'right' });
 
   currentY += 4;
 
@@ -846,7 +847,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
         return [
           idx + 1,
           menuDisplay,
-          `${item.totalQty}x`,
+          `${item.totalQty}`,
         ];
       });
 
@@ -862,11 +863,6 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
       doc.setTextColor(15, 23, 42); // slate-900
       doc.text(`${catIdx + 1}. ${catName.toUpperCase()}`, margin, currentY);
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(100, 116, 139); // slate-500
-      doc.text(`${catTotalQty} porsi`, pageWidth - margin, currentY, { align: 'right' });
-
       currentY += 2.5;
 
       // Buat Tabel AutoTable
@@ -876,7 +872,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
         tableWidth: contentWidth,
         head: [['No', 'Nama Menu & Catatan', 'Jumlah']],
         body: tableRows,
-        foot: [['', `Subtotal ${catName}`, `${catTotalQty}x`]],
+        foot: [['', `Subtotal ${catName}`, `${catTotalQty}`]],
         theme: 'plain',
         headStyles: {
           fillColor: [241, 245, 249], // slate-100 lembut
