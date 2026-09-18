@@ -38,7 +38,7 @@ export default function CreateEventPage() {
   const [restaurantAddress, setRestaurantAddress] = useState('');
 
   // Tax & Rounding Config
-  const [useTax, setUseTax] = useState(true);
+  const [useTax, setUseTax] = useState(false);
   const [taxPercent, setTaxPercent] = useState(10);
   const [useServiceCharge, setUseServiceCharge] = useState(false);
   const [serviceChargePercent, setServiceChargePercent] = useState(5);

@@ -75,6 +75,7 @@ export default function OrderPage() {
               body: JSON.stringify(restored),
             });
             setEvent(restored);
+            setShowTaxEstimate(Boolean(restored.taxConfig?.useTax));
             setError('');
             return;
           }
@@ -86,6 +87,7 @@ export default function OrderPage() {
         setError(json.message || 'Acara tidak ditemukan.');
       } else {
         setEvent(json.data);
+        setShowTaxEstimate(Boolean(json.data.taxConfig?.useTax));
         const serverOrders: UserOrder[] = json.orders || [];
         setOrders(serverOrders);
 
@@ -140,6 +142,7 @@ export default function OrderPage() {
     setUserName('');
     setExistingOrder(null);
     setSelectedItems({});
+    setShowTaxEstimate(Boolean(event?.taxConfig?.useTax));
   };
 
   // Categories list
@@ -319,6 +322,7 @@ export default function OrderPage() {
       setUserName('');
       setSelectedItems({});
       setShowBreakdown(false);
+      setShowTaxEstimate(Boolean(event?.taxConfig?.useTax));
 
       // 3. Perbarui state orders secara langsung agar chip nama langsung muncul
       if (returnedOrders.length > 0) {
