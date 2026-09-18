@@ -736,14 +736,14 @@ export default function CreateEventPage() {
                   {
                     value: 'floor_1000',
                     badge: 'Sesuai Nota Resto',
-                    label: 'Bulatkan ke Bawah ke Rp 1.000 (Diskon Sisa)',
-                    sub: 'Contoh di nota: Rp 206.250 ➔ Rp 206.000 (-Rp 250)',
+                    label: 'Bulatkan ke Bawah (Sesuai Nota Resto)',
+                    sub: 'Contoh: Rp 206.250 ➔ Rp 206.000 (-Rp 250) | Rp 17.600 ➔ Rp 17.500 (-Rp 100)',
                   },
                   {
                     value: 'floor_500',
                     badge: 'Sesuai Nota Resto',
                     label: 'Bulatkan ke Bawah ke Rp 500',
-                    sub: 'Contoh: Rp 206.250 ➔ Rp 206.000 (-Rp 250)',
+                    sub: 'Contoh: Rp 17.600 ➔ Rp 17.500 (-Rp 100) | Rp 206.250 ➔ Rp 206.000 (-Rp 250)',
                   },
                   {
                     value: 'round_1000',

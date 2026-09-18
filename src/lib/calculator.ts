@@ -42,15 +42,11 @@ export function calculateOrder(
   let roundingAmount = 0;
   const mode = taxConfig.rounding || 'none';
 
-  if (mode === 'floor_1000') {
-    // Sesuai Nota Resto: dibulatkan ke bawah ke 1000 terdekat (diskon/potongan minus)
-    // Contoh di nota: 206.250 -> 206.000, rounding = -250
-    const remainder = rawTotal % 1000;
-    if (remainder > 0) {
-      roundingAmount = -remainder;
-    }
-  } else if (mode === 'floor_500') {
-    // Dibulatkan ke bawah ke 500 terdekat
+  if (mode === 'floor_1000' || mode === 'floor_500') {
+    // Sesuai Nota Resto: dibulatkan ke bawah ke kelipatan Rp 500 terdekat (diskon sisa pecahan)
+    // Contoh di nota kasir resto:
+    // - Rp 206.250 ➔ Rp 206.000 (diskon sisa Rp 250)
+    // - Rp 17.600 ➔ Rp 17.500 (diskon sisa Rp 100)
     const remainder = rawTotal % 500;
     if (remainder > 0) {
       roundingAmount = -remainder;
