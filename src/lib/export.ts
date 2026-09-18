@@ -1217,6 +1217,155 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.save(filename);
 }
 
+// Rekap PDF Format Distribusi per Orang (1/2 A4 Landscape: 210mm x 148.5mm, 2 Kolom Sejajar)
+// Menampilkan siapa yang memesan dan pesanan apa saja (tanpa harga), ideal untuk pembagian makanan kantor
+export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder[]) {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: [148.5, 210], // 210mm x 148.5mm (1/2 A4 Landscape)
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 148.5;
+  const margin = 8;
+  const contentWidth = pageWidth - margin * 2; // 194mm
+  const colGap = 6;
+  const colWidth = (contentWidth - colGap) / 2; // 94mm
+
+  // Hitung total porsi keseluruhan
+  let totalPortions = 0;
+  orders.forEach((o) => {
+    o.items.forEach((it) => {
+      totalPortions += it.quantity;
+    });
+  });
+
+  // Bagi daftar order menjadi 2 kolom (Kiri dan Kanan) seimbang berdasarkan perkiraan jumlah baris
+  const leftOrders: Array<{ order: UserOrder; originalIndex: number }> = [];
+  const rightOrders: Array<{ order: UserOrder; originalIndex: number }> = [];
+
+  let leftWeight = 0;
+  let rightWeight = 0;
+
+  orders.forEach((order, idx) => {
+    const weight = Math.max(order.items.length, 1);
+    if (leftWeight <= rightWeight) {
+      leftOrders.push({ order, originalIndex: idx + 1 });
+      leftWeight += weight;
+    } else {
+      rightOrders.push({ order, originalIndex: idx + 1 });
+      rightWeight += weight;
+    }
+  });
+
+  // 1. Header Atas
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  const titleText = `DISTRIBUSI PESANAN • ${(event.restaurantName || event.title).toUpperCase()}`;
+  doc.text(titleText, margin, 9);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`${formatIndonesianDate(event.date)} pk ${event.time} WIB`, pageWidth - margin, 9, { align: 'right' });
+
+  // Garis pemisah header
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 12, pageWidth - margin, 12);
+
+  const startY = 14.5;
+
+  // 2. Helper Render Kolom Tabel
+  const renderOrdersTable = (
+    orderList: Array<{ order: UserOrder; originalIndex: number }>,
+    startX: number
+  ) => {
+    if (orderList.length === 0) return;
+
+    const rows = orderList.map((entry) => {
+      const { order, originalIndex } = entry;
+      const itemsText = order.items
+        .map((it) => {
+          let str = `${it.quantity}x ${it.menuItemName}`;
+          if (it.notes && it.notes.trim()) {
+            str += `\n   ↳ ${it.notes.trim()}`;
+          }
+          return str;
+        })
+        .join('\n');
+
+      return [
+        originalIndex,
+        order.userName,
+        itemsText,
+      ];
+    });
+
+    autoTable(doc, {
+      startY,
+      margin: { left: startX, right: pageWidth - startX - colWidth },
+      tableWidth: colWidth,
+      head: [[
+        { content: 'NO', styles: { cellWidth: 8, halign: 'center' } },
+        { content: 'NAMA', styles: { cellWidth: 26, halign: 'left' } },
+        { content: 'PESANAN', styles: { cellWidth: colWidth - 8 - 26, halign: 'left' } },
+      ]],
+      body: rows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [245, 245, 245],
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.25,
+        fontStyle: 'bold',
+        fontSize: 7.5,
+        cellPadding: { top: 1.2, bottom: 1.2, left: 1.5, right: 1.5 },
+      },
+      bodyStyles: {
+        fontSize: 7.5,
+        textColor: [0, 0, 0],
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2,
+        cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
+      },
+      columnStyles: {
+        0: { cellWidth: 8, halign: 'center', fontStyle: 'bold', valign: 'top' },
+        1: { cellWidth: 26, halign: 'left', fontStyle: 'bold', valign: 'top' },
+        2: { cellWidth: colWidth - 8 - 26, halign: 'left', valign: 'top' },
+      },
+    });
+  };
+
+  // Render Kiri & Kanan
+  renderOrdersTable(leftOrders, margin);
+  const rightColX = margin + colWidth + colGap;
+  renderOrdersTable(rightOrders, rightColX);
+
+  // 3. Footer Pas di Batas 1/2 A4 (Y = 140.5mm)
+  const footerY = pageHeight - 8;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(80, 80, 80);
+  doc.text('CHECKLIST PEMBAGIAN MAKANAN', margin, footerY + 2);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`TOTAL: ${orders.length} ORANG • ${totalPortions} PORSI`, pageWidth - margin, footerY + 2, { align: 'right' });
+
+  // Simpan file
+  const cleanResto = (event.restaurantName || event.title || 'Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Distribusi_Pesanan_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
+}
+
 export function generateWhatsAppMessage(event: EventData, baseUrl: string) {
   const url = `${baseUrl}/order/${event.id}`;
   return `🍱 *Pesanan Makan Kantor: ${event.title}*

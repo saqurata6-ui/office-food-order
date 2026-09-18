@@ -39,6 +39,7 @@ import {
   ChevronDown,
   Columns2,
   ClipboardCheck,
+  UserCheck,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
@@ -48,6 +49,7 @@ import {
   exportToCategoryPdf,
   exportToLandscapeHalfA4Pdf,
   exportToSlipOrderHalfA4Pdf,
+  exportToPersonOrderHalfA4Pdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -961,7 +963,7 @@ export default function EventAdminPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
 
-                    {/* Opsi 1: Format Slip Checklist Resto (Kisi Bergaris 1/2 A4, Dimakan/Bungkus, Tanpa No Meja) */}
+                    {/* Opsi 1: Format Slip Checklist Resto (Kisi Bergaris 1/2 A4, Tanpa No Meja) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -980,6 +982,31 @@ export default function EventAdminPage() {
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
                           Format nota fisik restoran bergaris kotak 2 kolom pas 1/2 A4, tanpa nomor meja.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 1b: Distribusi Pesanan per Orang (Siapa Pesan Apa, 1/2 A4) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToPersonOrderHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-violet-600 group-hover:text-white transition">
+                        <UserCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Distribusi per Orang</span>
+                          <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 text-[9px] font-bold rounded">Siapa Pesan Apa</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Format 1/2 A4 berisi daftar nama karyawan & pesanannya untuk pembagian makanan.
                         </div>
                       </div>
                     </button>
