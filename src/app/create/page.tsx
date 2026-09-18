@@ -740,12 +740,6 @@ export default function CreateEventPage() {
                     sub: 'Contoh: Rp 206.250 ➔ Rp 206.000 (-Rp 250) | Rp 17.600 ➔ Rp 17.500 (-Rp 100)',
                   },
                   {
-                    value: 'floor_500',
-                    badge: 'Sesuai Nota Resto',
-                    label: 'Bulatkan ke Bawah ke Rp 500',
-                    sub: 'Contoh: Rp 17.600 ➔ Rp 17.500 (-Rp 100) | Rp 206.250 ➔ Rp 206.000 (-Rp 250)',
-                  },
-                  {
                     value: 'round_1000',
                     badge: 'Matematis',
                     label: 'Bulatkan ke Rp 1.000 Terdekat (Bisa +/-)',
@@ -763,32 +757,35 @@ export default function CreateEventPage() {
                     label: 'Tanpa Pembulatan',
                     sub: 'Nominal asli tanpa perubahan: Rp 206.250',
                   },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setRounding(opt.value as any)}
-                    className={`p-3 text-left rounded-xl border transition ${
-                      rounding === opt.value
-                        ? 'border-orange-500 bg-orange-50/70 text-orange-950 font-semibold ring-1 ring-orange-500'
-                        : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <span className="text-xs font-bold text-slate-900 leading-tight">{opt.label}</span>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                          opt.value.startsWith('floor')
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {opt.badge}
-                      </span>
-                    </div>
-                    <span className="block text-[11px] text-slate-500">{opt.sub}</span>
-                  </button>
-                ))}
+                ].map((opt) => {
+                  const isSelected = rounding === opt.value || (opt.value === 'floor_1000' && rounding === 'floor_500');
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setRounding(opt.value as any)}
+                      className={`p-3 text-left rounded-xl border transition ${
+                        isSelected
+                          ? 'border-orange-500 bg-orange-50/70 text-orange-950 font-semibold ring-1 ring-orange-500'
+                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span className="text-xs font-bold text-slate-900 leading-tight">{opt.label}</span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
+                            opt.value.startsWith('floor')
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {opt.badge}
+                        </span>
+                      </div>
+                      <span className="block text-[11px] text-slate-500">{opt.sub}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
