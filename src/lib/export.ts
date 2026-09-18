@@ -975,21 +975,21 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
   doc.save(filename);
 }
 
-// Rekap PDF Format Slip Order / Form Checklist 1/2 A4 (A5 Portrait: 148.5mm x 210mm)
-// Sesuai contoh nota/slip checklist restoran fisik: 2 kolom kisi kotak bergaris, opsi Dimakan/Bungkus, TANPA nomor meja
+// Rekap PDF Format Slip Order / Form Checklist 1/2 A4 (Ukuran 210mm x 148.5mm / Half A4 Landscape)
+// Sesuai contoh nota/slip checklist restoran fisik: 2 kolom kisi kotak bergaris, pas 1/2 A4, TANPA nomor meja, TANPA centangan dimakan/bungkus
 export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]) {
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
-    format: [148.5, 210], // 148.5mm x 210mm (1/2 A4 Portrait)
+    format: [148.5, 210], // Lebar 210mm, Tinggi 148.5mm (1/2 A4 Landscape)
   });
 
-  const pageWidth = 148.5;
-  const pageHeight = 210;
-  const margin = 6;
-  const contentWidth = pageWidth - margin * 2; // 136.5mm
-  const colGap = 3.5;
-  const colWidth = (contentWidth - colGap) / 2; // 66.5mm
+  const pageWidth = 210;
+  const pageHeight = 148.5;
+  const margin = 8;
+  const contentWidth = pageWidth - margin * 2; // 194mm
+  const colGap = 6;
+  const colWidth = (contentWidth - colGap) / 2; // 94mm
 
   // 1. Kumpulkan data pesanan yang masuk
   const orderQtyMap: Record<string, number> = {};
@@ -1113,27 +1113,26 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
     });
   }
 
-  // 4. Render Header Form
+  // 4. Render Header Form Bersih (Tanpa Centangan Dimakan/Bungkus)
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
   const titleText = (event.restaurantName || event.title).toUpperCase();
-  doc.text(titleText, pageWidth / 2, 8.5, { align: 'center' });
+  doc.text(titleText, margin, 9);
 
-  // Checkbox pilihan Dimakan / Bungkus (persis foto: "... DIMAKAN / BUNGKUS")
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(80, 80, 80);
+  doc.text(`${formatIndonesianDate(event.date)} pk ${event.time} WIB`, pageWidth - margin, 9, { align: 'right' });
 
-  doc.rect(20, 11, 3, 3);
-  doc.text('DIMAKAN', 24.5, 13.3);
+  // Garis pemisah header tipis
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 12, pageWidth - margin, 12);
 
-  doc.rect(82, 11, 3, 3);
-  doc.text('BUNGKUS / TAKEAWAY', 86.5, 13.3);
+  const startY = 14.5;
 
-  const startY = 16.5;
-
-  // 5. Render Kolom Tabel Kisi (Grid Bergaris ala Slip Nota Fisik)
+  // 5. Render Kolom Tabel Kisi (Grid Bergaris Kotak ala Slip Nota Fisik)
   const renderSlipColumn = (catNames: string[], startX: number) => {
     let currentY = startY;
 
@@ -1158,9 +1157,9 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
         margin: { left: startX, right: pageWidth - startX - colWidth },
         tableWidth: colWidth,
         head: [[
-          { content: 'NO', styles: { cellWidth: 7, halign: 'center' } },
-          { content: catName.toUpperCase(), styles: { cellWidth: colWidth - 7 - 14, halign: 'left' } },
-          { content: 'JUMLAH', styles: { cellWidth: 14, halign: 'center' } },
+          { content: 'NO', styles: { cellWidth: 8, halign: 'center' } },
+          { content: catName.toUpperCase(), styles: { cellWidth: colWidth - 8 - 16, halign: 'left' } },
+          { content: 'JUMLAH', styles: { cellWidth: 16, halign: 'center' } },
         ]],
         body: rows,
         theme: 'grid',
@@ -1170,20 +1169,20 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
           lineColor: [0, 0, 0],
           lineWidth: 0.25,
           fontStyle: 'bold',
-          fontSize: 7,
-          cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 },
+          fontSize: 7.5,
+          cellPadding: { top: 1.2, bottom: 1.2, left: 1.5, right: 1.5 },
         },
         bodyStyles: {
-          fontSize: 7.2,
+          fontSize: 7.5,
           textColor: [0, 0, 0],
           lineColor: [0, 0, 0],
           lineWidth: 0.2,
-          cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
+          cellPadding: { top: 1.4, bottom: 1.4, left: 1.5, right: 1.5 },
         },
         columnStyles: {
-          0: { cellWidth: 7, halign: 'center', fontStyle: 'bold', valign: 'middle' },
-          1: { cellWidth: colWidth - 7 - 14, halign: 'left', valign: 'middle' },
-          2: { cellWidth: 14, halign: 'center', fontStyle: 'bold', valign: 'middle' },
+          0: { cellWidth: 8, halign: 'center', fontStyle: 'bold', valign: 'middle' },
+          1: { cellWidth: colWidth - 8 - 16, halign: 'left', valign: 'middle' },
+          2: { cellWidth: 16, halign: 'center', fontStyle: 'bold', valign: 'middle' },
         },
       });
 
@@ -1196,19 +1195,19 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
   const rightColX = margin + colWidth + colGap;
   renderSlipColumn(rightCategories, rightColX);
 
-  // 6. Footer (TANPA NOMOR MEJA, sesuai permintaan user)
-  const footerY = pageHeight - 8;
+  // 6. Footer Pas di Batas 1/2 A4 (Tinggi ~140mm, TANPA NOMOR MEJA)
+  const footerY = pageHeight - 8; // Y = 140.5 mm
   doc.setDrawColor(0, 0, 0);
   doc.setLineWidth(0.3);
   doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(50, 50, 50);
-  doc.text(`${formatIndonesianDate(event.date)} pk ${event.time} WIB`, margin, footerY + 2);
+  doc.setFontSize(7.5);
+  doc.setTextColor(80, 80, 80);
+  doc.text('SLIP CHECKLIST PESANAN', margin, footerY + 2);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
+  doc.setFontSize(8);
   doc.setTextColor(0, 0, 0);
   doc.text(`TOTAL: ${grandTotalQty} PORSI`, pageWidth - margin, footerY + 2, { align: 'right' });
 

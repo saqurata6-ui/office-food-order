@@ -979,7 +979,7 @@ export default function EventAdminPage() {
                           <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-bold rounded">Form 1/2 A4</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Format nota fisik restoran bergaris kotak 2 kolom, ada opsi Dimakan/Bungkus & tanpa nomor meja.
+                          Format nota fisik restoran bergaris kotak 2 kolom pas 1/2 A4, tanpa nomor meja.
                         </div>
                       </div>
                     </button>
