@@ -38,6 +38,7 @@ import {
   ChefHat,
   ChevronDown,
   Columns2,
+  ClipboardCheck,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
@@ -46,6 +47,7 @@ import {
   exportToPdf,
   exportToCategoryPdf,
   exportToLandscapeHalfA4Pdf,
+  exportToSlipOrderHalfA4Pdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -959,7 +961,32 @@ export default function EventAdminPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
 
-                    {/* Opsi 1: Rekap 1/2 A4 Landscape (Kanan - Kiri, Pas 1 Lembar) */}
+                    {/* Opsi 1: Format Slip Checklist Resto (Kisi Bergaris 1/2 A4, Dimakan/Bungkus, Tanpa No Meja) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToSlipOrderHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-600 group-hover:text-white transition">
+                        <ClipboardCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Slip Checklist Resto</span>
+                          <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-bold rounded">Form 1/2 A4</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Format nota fisik restoran bergaris kotak 2 kolom, ada opsi Dimakan/Bungkus & tanpa nomor meja.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 2: Rekap 1/2 A4 Landscape (Kanan - Kiri, Pas 1 Lembar) */}
                     <button
                       type="button"
                       onClick={() => {

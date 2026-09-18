@@ -975,6 +975,249 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
   doc.save(filename);
 }
 
+// Rekap PDF Format Slip Order / Form Checklist 1/2 A4 (A5 Portrait: 148.5mm x 210mm)
+// Sesuai contoh nota/slip checklist restoran fisik: 2 kolom kisi kotak bergaris, opsi Dimakan/Bungkus, TANPA nomor meja
+export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]) {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [148.5, 210], // 148.5mm x 210mm (1/2 A4 Portrait)
+  });
+
+  const pageWidth = 148.5;
+  const pageHeight = 210;
+  const margin = 6;
+  const contentWidth = pageWidth - margin * 2; // 136.5mm
+  const colGap = 3.5;
+  const colWidth = (contentWidth - colGap) / 2; // 66.5mm
+
+  // 1. Kumpulkan data pesanan yang masuk
+  const orderQtyMap: Record<string, number> = {};
+  const orderNotesMap: Record<string, string[]> = {};
+  let grandTotalQty = 0;
+
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      const key = item.menuItemId || item.menuItemName.toLowerCase().trim();
+      orderQtyMap[key] = (orderQtyMap[key] || 0) + item.quantity;
+      grandTotalQty += item.quantity;
+
+      if (item.notes && item.notes.trim()) {
+        if (!orderNotesMap[key]) orderNotesMap[key] = [];
+        const n = item.notes.trim();
+        if (!orderNotesMap[key].includes(n)) {
+          orderNotesMap[key].push(n);
+        }
+      }
+    });
+  });
+
+  // 2. Kumpulkan master kategori & menu
+  const categoryGroups: Record<string, Array<{ id: string; name: string; qty: number; notes: string[] }>> = {};
+  const knownCategories: string[] = [];
+
+  // Ambil dari master menu event jika ada
+  if (event.menuItems && Array.isArray(event.menuItems) && event.menuItems.length > 0) {
+    event.menuItems.forEach((m) => {
+      let cat = (m.category || '').trim();
+      if (!cat) {
+        cat = isBeverageItem(m.id, m.name, event.menuItems || []) ? 'Minuman' : 'Makanan';
+      }
+      if (!categoryGroups[cat]) {
+        categoryGroups[cat] = [];
+        knownCategories.push(cat);
+      }
+
+      const keyById = m.id;
+      const keyByName = m.name.toLowerCase().trim();
+      const qty = orderQtyMap[keyById] || orderQtyMap[keyByName] || 0;
+      const notes = orderNotesMap[keyById] || orderNotesMap[keyByName] || [];
+
+      categoryGroups[cat].push({
+        id: m.id,
+        name: m.name,
+        qty,
+        notes,
+      });
+    });
+  }
+
+  // Tambahkan item dari orders yang mungkin belum ada di master menu
+  orders.forEach((order) => {
+    order.items.forEach((item) => {
+      const keyById = item.menuItemId;
+      const keyByName = item.menuItemName.toLowerCase().trim();
+
+      let alreadyExists = false;
+      Object.values(categoryGroups).forEach((list) => {
+        if (list.some((it) => it.id === keyById || it.name.toLowerCase().trim() === keyByName)) {
+          alreadyExists = true;
+        }
+      });
+
+      if (!alreadyExists) {
+        let cat = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || []) ? 'Minuman' : 'Makanan';
+        if (!categoryGroups[cat]) {
+          categoryGroups[cat] = [];
+          knownCategories.push(cat);
+        }
+        categoryGroups[cat].push({
+          id: item.menuItemId,
+          name: item.menuItemName,
+          qty: orderQtyMap[keyById] || orderQtyMap[keyByName] || item.quantity,
+          notes: orderNotesMap[keyById] || orderNotesMap[keyByName] || [],
+        });
+      }
+    });
+  });
+
+  // Jika master menu banyak (>35 item), prioritaskan hanya menu yang dipesan agar pas 1 lembar
+  const totalMenuItemsCount = Object.values(categoryGroups).reduce((sum, list) => sum + list.length, 0);
+  const filterOnlyOrdered = totalMenuItemsCount > 35;
+
+  const finalCategoryList: string[] = [];
+  knownCategories.forEach((cat) => {
+    if (filterOnlyOrdered) {
+      categoryGroups[cat] = categoryGroups[cat].filter((it) => it.qty > 0);
+    }
+    if (categoryGroups[cat] && categoryGroups[cat].length > 0) {
+      finalCategoryList.push(cat);
+    }
+  });
+
+  // 3. Bagi Kategori ke Kolom Kiri dan Kolom Kanan
+  let leftCategories: string[] = [];
+  let rightCategories: string[] = [];
+
+  const beverageCategories = finalCategoryList.filter((cat) => {
+    const c = cat.toLowerCase();
+    return c.includes('minum') || c.includes('drink') || c.includes('beverage') || c.includes('kopi') || c.includes('jus') || c.includes('teh');
+  });
+  const foodCategories = finalCategoryList.filter((cat) => !beverageCategories.includes(cat));
+
+  if (beverageCategories.length > 0 && foodCategories.length > 0) {
+    leftCategories = foodCategories;
+    rightCategories = beverageCategories;
+  } else {
+    let leftWeight = 0;
+    let rightWeight = 0;
+    finalCategoryList.forEach((cat) => {
+      const weight = categoryGroups[cat].length + 2;
+      if (leftWeight <= rightWeight) {
+        leftCategories.push(cat);
+        leftWeight += weight;
+      } else {
+        rightCategories.push(cat);
+        rightWeight += weight;
+      }
+    });
+  }
+
+  // 4. Render Header Form
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  const titleText = (event.restaurantName || event.title).toUpperCase();
+  doc.text(titleText, pageWidth / 2, 8.5, { align: 'center' });
+
+  // Checkbox pilihan Dimakan / Bungkus (persis foto: "... DIMAKAN / BUNGKUS")
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+
+  doc.rect(20, 11, 3, 3);
+  doc.text('DIMAKAN', 24.5, 13.3);
+
+  doc.rect(82, 11, 3, 3);
+  doc.text('BUNGKUS / TAKEAWAY', 86.5, 13.3);
+
+  const startY = 16.5;
+
+  // 5. Render Kolom Tabel Kisi (Grid Bergaris ala Slip Nota Fisik)
+  const renderSlipColumn = (catNames: string[], startX: number) => {
+    let currentY = startY;
+
+    catNames.forEach((catName) => {
+      const items = categoryGroups[catName] || [];
+      if (items.length === 0) return;
+
+      const rows = items.map((it, idx) => {
+        let menuDisplay = it.name;
+        if (it.notes.length > 0) {
+          menuDisplay += '\n' + it.notes.map((n) => `↳ ${n}`).join('\n');
+        }
+        return [
+          idx + 1,
+          menuDisplay,
+          it.qty > 0 ? `${it.qty}` : '',
+        ];
+      });
+
+      autoTable(doc, {
+        startY: currentY,
+        margin: { left: startX, right: pageWidth - startX - colWidth },
+        tableWidth: colWidth,
+        head: [[
+          { content: 'NO', styles: { cellWidth: 7, halign: 'center' } },
+          { content: catName.toUpperCase(), styles: { cellWidth: colWidth - 7 - 14, halign: 'left' } },
+          { content: 'JUMLAH', styles: { cellWidth: 14, halign: 'center' } },
+        ]],
+        body: rows,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [245, 245, 245],
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.25,
+          fontStyle: 'bold',
+          fontSize: 7,
+          cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 },
+        },
+        bodyStyles: {
+          fontSize: 7.2,
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.2,
+          cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
+        },
+        columnStyles: {
+          0: { cellWidth: 7, halign: 'center', fontStyle: 'bold', valign: 'middle' },
+          1: { cellWidth: colWidth - 7 - 14, halign: 'left', valign: 'middle' },
+          2: { cellWidth: 14, halign: 'center', fontStyle: 'bold', valign: 'middle' },
+        },
+      });
+
+      currentY = (doc as any).lastAutoTable.finalY + 2.5;
+    });
+  };
+
+  // Render Kiri & Kanan
+  renderSlipColumn(leftCategories, margin);
+  const rightColX = margin + colWidth + colGap;
+  renderSlipColumn(rightCategories, rightColX);
+
+  // 6. Footer (TANPA NOMOR MEJA, sesuai permintaan user)
+  const footerY = pageHeight - 8;
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(50, 50, 50);
+  doc.text(`${formatIndonesianDate(event.date)} pk ${event.time} WIB`, margin, footerY + 2);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`TOTAL: ${grandTotalQty} PORSI`, pageWidth - margin, footerY + 2, { align: 'right' });
+
+  // Simpan file
+  const cleanResto = (event.restaurantName || event.title || 'Slip_Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Slip_Checklist_1-2_A4_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
+}
+
 export function generateWhatsAppMessage(event: EventData, baseUrl: string) {
   const url = `${baseUrl}/order/${event.id}`;
   return `🍱 *Pesanan Makan Kantor: ${event.title}*
