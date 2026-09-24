@@ -104,6 +104,7 @@ export default function EventAdminPage() {
   const [editUseService, setEditUseService] = useState(false);
   const [editServicePercent, setEditServicePercent] = useState<number | string>(5);
   const [editRounding, setEditRounding] = useState<RoundingType>('none');
+  const [editAllowItemNotes, setEditAllowItemNotes] = useState(true);
   const [recalculateOrdersOption, setRecalculateOrdersOption] = useState(true);
   const [isSavingTax, setIsSavingTax] = useState(false);
 
@@ -353,6 +354,7 @@ export default function EventAdminPage() {
     setEditUseService(Boolean(event.taxConfig?.useServiceCharge));
     setEditServicePercent(event.taxConfig?.serviceChargePercent ?? 5);
     setEditRounding(event.taxConfig?.rounding || 'none');
+    setEditAllowItemNotes(event.allowItemNotes ?? event.taxConfig?.allowItemNotes ?? true);
     setRecalculateOrdersOption(true);
     setIsTaxModalOpen(true);
   };
@@ -374,6 +376,7 @@ export default function EventAdminPage() {
         useServiceCharge: editUseService,
         serviceChargePercent: Math.max(0, Number(editServicePercent) || 0),
         rounding: editRounding,
+        allowItemNotes: editAllowItemNotes,
       };
 
       const res = await fetch(`/api/events/${eventId}`, {
@@ -381,6 +384,7 @@ export default function EventAdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           taxConfig: newTaxConfig,
+          allowItemNotes: editAllowItemNotes,
           recalculateOrders: recalculateOrdersOption,
           adminPin,
         }),
@@ -2414,7 +2418,38 @@ export default function EventAdminPage() {
                 </div>
               </div>
 
-              {/* Section 4: Penerapan ke Pesanan */}
+              {/* Section 4: Catatan Pesanan Menu */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={editAllowItemNotes}
+                      onChange={(e) => setEditAllowItemNotes(e.target.checked)}
+                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 border-slate-300"
+                    />
+                    <span className="text-xs font-bold text-slate-800">
+                      Bisa Ditambahkan Catatan Per Menu
+                    </span>
+                  </label>
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      editAllowItemNotes
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {editAllowItemNotes ? 'Boleh Catatan' : 'Tanpa Catatan'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  {editAllowItemNotes
+                    ? 'Pemesan dapat menambahkan request khusus per menu (pedas sedang, tanpa es, kuah dipisah, dll).'
+                    : 'Kolom catatan khusus disembunyikan di layar pemesan (cocok untuk restoran yang tidak menerima request khusus).'}
+                </p>
+              </div>
+
+              {/* Section 5: Penerapan ke Pesanan */}
               <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 space-y-1.5">
                 <label className="flex items-start gap-2 cursor-pointer select-none">
                   <input

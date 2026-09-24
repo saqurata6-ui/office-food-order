@@ -66,7 +66,7 @@ export async function PATCH(
     }
 
     const body = await req.json();
-    const { isLocked, menuItems, taxConfig, recalculateOrders = true, adminPin } = body;
+    const { isLocked, menuItems, taxConfig, recalculateOrders = true, adminPin, allowItemNotes } = body;
 
     if (adminPin && adminPin !== event.adminPin) {
       return NextResponse.json(
@@ -84,15 +84,25 @@ export async function PATCH(
       updatedEvent.menuItems = menuItems;
     }
 
+    if (allowItemNotes !== undefined) {
+      updatedEvent.allowItemNotes = Boolean(allowItemNotes);
+    }
+
     let updatedOrders = await db.getOrders(event.id);
 
     if (taxConfig) {
+      const effectiveAllowNotes = allowItemNotes !== undefined
+        ? Boolean(allowItemNotes)
+        : (taxConfig.allowItemNotes !== undefined ? Boolean(taxConfig.allowItemNotes) : (updatedEvent.allowItemNotes ?? true));
+      
+      updatedEvent.allowItemNotes = effectiveAllowNotes;
       updatedEvent.taxConfig = {
         useTax: Boolean(taxConfig.useTax),
         taxPercent: Number(taxConfig.taxPercent) || 0,
         useServiceCharge: Boolean(taxConfig.useServiceCharge),
         serviceChargePercent: Number(taxConfig.serviceChargePercent) || 0,
         rounding: taxConfig.rounding || 'none',
+        allowItemNotes: effectiveAllowNotes,
       };
 
       if (recalculateOrders && updatedOrders.length > 0) {

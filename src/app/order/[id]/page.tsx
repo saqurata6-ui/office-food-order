@@ -200,6 +200,9 @@ export default function OrderPage() {
     });
   };
 
+  // Check if restaurant accepts item notes
+  const allowItemNotes = event?.allowItemNotes ?? event?.taxConfig?.allowItemNotes ?? true;
+
   // Format order items for calculation
   const orderItemsList: OrderItem[] = useMemo(() => {
     if (!event) return [];
@@ -212,10 +215,10 @@ export default function OrderPage() {
           menuItemName: menu ? menu.name : 'Menu',
           price: menu ? menu.price : 0,
           quantity: data.quantity,
-          notes: data.notes,
+          notes: allowItemNotes ? (data.notes || '') : '',
         };
       });
-  }, [selectedItems, event]);
+  }, [selectedItems, event, allowItemNotes]);
 
   // Total calculations
   // Jika event memiliki PPN, PPN hanya dihitung ke total jika showTaxEstimate aktif
@@ -807,7 +810,7 @@ export default function OrderPage() {
                 </div>
 
                 {/* Compact Note input when quantity > 0 */}
-                {isSelected && !event.isLocked && (
+                {isSelected && !event.isLocked && allowItemNotes && (
                   <div className="mt-2 pt-2 border-t border-dashed border-orange-200/80 flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5 text-orange-500 shrink-0" />
                     <input
@@ -821,7 +824,7 @@ export default function OrderPage() {
                 )}
 
                 {/* Note readonly when locked */}
-                {isSelected && event.isLocked && current.notes && (
+                {isSelected && event.isLocked && current.notes && allowItemNotes && (
                   <div className="mt-1.5 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500">
                     Catatan: <span className="italic text-slate-700 font-medium">{current.notes}</span>
                   </div>
@@ -992,7 +995,7 @@ export default function OrderPage() {
                         <span className="text-orange-600 mr-1.5 font-extrabold">{it.quantity}x</span>
                         {it.menuItemName}
                       </div>
-                      {it.notes && (
+                      {it.notes && allowItemNotes && (
                         <p className="text-[11px] text-slate-500 italic mt-0.5">
                           Catatan: {it.notes}
                         </p>

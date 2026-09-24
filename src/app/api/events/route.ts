@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       taxConfig,
       menuItems,
       customSlug,
+      allowItemNotes,
     } = body;
 
     if (!title || !picName || !restaurantName) {
@@ -104,6 +105,8 @@ export async function POST(req: NextRequest) {
     // Admin PIN (4-digit)
     const adminPin = Math.floor(1000 + Math.random() * 9000).toString();
 
+    const effectiveAllowNotes = allowItemNotes !== undefined ? Boolean(allowItemNotes) : (taxConfig?.allowItemNotes !== undefined ? Boolean(taxConfig.allowItemNotes) : true);
+
     const newEvent: EventData = {
       id: eventId,
       adminPin,
@@ -113,13 +116,17 @@ export async function POST(req: NextRequest) {
       time: time || '12:00',
       restaurantName,
       restaurantAddress: restaurantAddress || '',
-      taxConfig: taxConfig || {
-        useTax: true,
-        taxPercent: 10,
-        useServiceCharge: false,
-        serviceChargePercent: 0,
-        rounding: 'none',
+      taxConfig: {
+        ...(taxConfig || {
+          useTax: false,
+          taxPercent: 10,
+          useServiceCharge: false,
+          serviceChargePercent: 0,
+          rounding: 'floor_1000',
+        }),
+        allowItemNotes: effectiveAllowNotes,
       },
+      allowItemNotes: effectiveAllowNotes,
       menuItems: menuItems || [],
       isLocked: false,
       createdAt: new Date().toISOString(),

@@ -123,6 +123,7 @@ export const db = {
             restaurantName: data.restaurant_name,
             restaurantAddress: data.restaurant_address || '',
             taxConfig: data.tax_config,
+            allowItemNotes: data.allow_item_notes ?? data.tax_config?.allowItemNotes ?? true,
             menuItems: data.menu_items || [],
             isLocked: data.is_locked,
             createdAt: data.created_at,
@@ -174,6 +175,7 @@ export const db = {
             restaurantName: d.restaurant_name,
             restaurantAddress: d.restaurant_address || '',
             taxConfig: d.tax_config,
+            allowItemNotes: d.allow_item_notes ?? d.tax_config?.allowItemNotes ?? true,
             menuItems: d.menu_items || [],
             isLocked: d.is_locked,
             createdAt: d.created_at,
@@ -193,9 +195,15 @@ export const db = {
 
   async saveEvent(event: EventData): Promise<EventData> {
     const cleanId = event.id.trim().toLowerCase();
+    const allowNotes = event.allowItemNotes !== undefined ? event.allowItemNotes : (event.taxConfig?.allowItemNotes ?? true);
     const eventToSave: EventData = {
       ...event,
       id: cleanId,
+      allowItemNotes: allowNotes,
+      taxConfig: {
+        ...event.taxConfig,
+        allowItemNotes: allowNotes,
+      },
       updatedAt: new Date().toISOString(),
     };
 

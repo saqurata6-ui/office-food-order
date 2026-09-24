@@ -42,6 +42,7 @@ export default function CreateEventPage() {
   const [taxPercent, setTaxPercent] = useState(10);
   const [useServiceCharge, setUseServiceCharge] = useState(false);
   const [serviceChargePercent, setServiceChargePercent] = useState(5);
+  const [allowItemNotes, setAllowItemNotes] = useState(true);
   const [rounding, setRounding] = useState<RoundingType>('floor_1000'); // Default sesuai nota user!
 
   // Menu items list
@@ -207,6 +208,7 @@ export default function CreateEventPage() {
       useServiceCharge,
       serviceChargePercent: Number(serviceChargePercent) || 0,
       rounding,
+      allowItemNotes,
     };
 
     try {
@@ -221,6 +223,7 @@ export default function CreateEventPage() {
           restaurantName: restaurantName.trim(),
           restaurantAddress: restaurantAddress.trim(),
           taxConfig,
+          allowItemNotes,
           menuItems,
         }),
       });
@@ -718,6 +721,39 @@ export default function CreateEventPage() {
                   <span className="text-xs font-semibold text-slate-600">%</span>
                 </div>
               )}
+            </div>
+
+            {/* Catatan Khusus Menu */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 bg-slate-50">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="allowItemNotes"
+                  checked={allowItemNotes}
+                  onChange={(e) => setAllowItemNotes(e.target.checked)}
+                  className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500 cursor-pointer"
+                />
+                <label htmlFor="allowItemNotes" className="cursor-pointer select-none">
+                  <span className="block text-xs sm:text-sm font-bold text-slate-800">
+                    Bisa Ditambahkan Catatan Per Menu
+                  </span>
+                  <span className="block text-[11px] text-slate-500">
+                    {allowItemNotes
+                      ? 'Aktif: Pemesan bisa mengisi request khusus (misal: pedas, tanpa es, kuah dipisah)'
+                      : 'Nonaktif: Kolom catatan disembunyikan (untuk resto yang tidak menerima catatan)'}
+                  </span>
+                </label>
+              </div>
+
+              <span
+                className={`text-[10px] px-2.5 py-1 rounded-full font-bold shrink-0 transition ${
+                  allowItemNotes
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-200 text-slate-600'
+                }`}
+              >
+                {allowItemNotes ? 'Boleh Catatan' : 'Tanpa Catatan'}
+              </span>
             </div>
 
             {/* Rounding Selection */}

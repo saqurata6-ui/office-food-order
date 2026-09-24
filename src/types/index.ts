@@ -26,6 +26,7 @@ export interface TaxConfig {
   useServiceCharge: boolean;
   serviceChargePercent: number;
   rounding: RoundingType;
+  allowItemNotes?: boolean;
 }
 
 export interface EventData {
@@ -39,6 +40,7 @@ export interface EventData {
   restaurantAddress: string;
   taxConfig: TaxConfig;
   menuItems: MenuItem[];
+  allowItemNotes?: boolean;
   isLocked: boolean;
   createdAt: string;
   updatedAt: string;
