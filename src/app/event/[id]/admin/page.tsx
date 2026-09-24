@@ -50,6 +50,9 @@ import {
   exportToLandscapeHalfA4Pdf,
   exportToSlipOrderHalfA4Pdf,
   exportToPersonOrderHalfA4Pdf,
+  printIndividualThermalReceipt,
+  printAllIndividualThermalReceipts,
+  exportSingleOrderToReceiptPdf,
   generateWhatsAppMessage,
   getGroupedRestaurantOrders,
 } from '@/lib/export';
@@ -107,6 +110,20 @@ export default function EventAdminPage() {
   const [editAllowItemNotes, setEditAllowItemNotes] = useState(true);
   const [recalculateOrdersOption, setRecalculateOrdersOption] = useState(true);
   const [isSavingTax, setIsSavingTax] = useState(false);
+
+  // Thermal Receipt Modal state
+  const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<UserOrder | null>(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+
+  const handleOpenReceiptModal = (order: UserOrder) => {
+    setSelectedReceiptOrder(order);
+    setIsReceiptModalOpen(true);
+  };
+
+  const handleCloseReceiptModal = () => {
+    setIsReceiptModalOpen(false);
+    setSelectedReceiptOrder(null);
+  };
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1472,6 +1489,18 @@ export default function EventAdminPage() {
                 {paidOrdersCount}
               </span>
             </button>
+
+            {/* Tombol Cetak Seluruh Nota Karyawan */}
+            <button
+              type="button"
+              onClick={() => printAllIndividualThermalReceipts(event!, filteredOrders)}
+              disabled={filteredOrders.length === 0}
+              className="px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs disabled:opacity-40 sm:ml-auto shrink-0"
+              title="Cetak seluruh nota pemesan sekaligus dalam format struk thermal kasir"
+            >
+              <Printer className="w-3.5 h-3.5 text-orange-600" />
+              <span>Cetak Semua Nota</span>
+            </button>
           </div>
 
           {filteredOrders.length === 0 ? (
@@ -1587,11 +1616,11 @@ export default function EventAdminPage() {
                     </div>
 
                     {/* Quick Action Footer */}
-                    <div className="grid grid-cols-12 gap-2 pt-1">
+                    <div className="grid grid-cols-12 gap-1.5 pt-1">
                       <button
                         type="button"
                         onClick={() => handleOpenPaymentModal(order)}
-                        className={`col-span-7 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border shadow-2xs ${
+                        className={`col-span-5 py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border shadow-2xs ${
                           order.isPaid
                             ? 'bg-white hover:bg-slate-50 border-emerald-300 text-emerald-800'
                             : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
@@ -1599,21 +1628,31 @@ export default function EventAdminPage() {
                       >
                         {order.isPaid ? (
                           <>
-                            <Edit3 className="w-3.5 h-3.5" />
-                            <span>Ubah Status</span>
+                            <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Ubah Status</span>
                           </>
                         ) : (
                           <>
-                            <Banknote className="w-3.5 h-3.5" />
-                            <span>Catat Bayar</span>
+                            <Banknote className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Bayar</span>
                           </>
                         )}
                       </button>
 
                       <button
                         type="button"
+                        onClick={() => handleOpenReceiptModal(order)}
+                        className="col-span-3 py-2 px-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 text-xs font-bold transition flex items-center justify-center gap-1"
+                        title="Cetak struk nota pesanan karyawan ini"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                        <span>Nota</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => shareIndividualWhatsApp(order)}
-                        className="col-span-3 py-2 px-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center justify-center gap-1"
+                        className="col-span-2 py-2 px-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center justify-center gap-1"
                         title="Kirim rincian tagihan via WhatsApp ke karyawan ini"
                       >
                         <MessageCircle className="w-3.5 h-3.5" />
@@ -1623,7 +1662,7 @@ export default function EventAdminPage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteOrder(order.id, order.userName)}
-                        className="col-span-2 py-2 px-2 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 text-xs font-medium transition flex items-center justify-center"
+                        className="col-span-2 py-2 px-1 rounded-xl bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 text-xs font-medium transition flex items-center justify-center"
                         title="Hapus pesanan"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -1735,6 +1774,14 @@ export default function EventAdminPage() {
                         </td>
                         <td className="py-3 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenReceiptModal(order)}
+                              className="text-orange-600 hover:text-orange-800 p-1.5 rounded-lg hover:bg-orange-50 transition"
+                              title="Cetak struk nota pesanan karyawan ini"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
                             <button
                               type="button"
                               onClick={() => shareIndividualWhatsApp(order)}
@@ -2496,6 +2543,191 @@ export default function EventAdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CETAK STRUK NOTA KASIR PER PEMESAN */}
+      {isReceiptModalOpen && selectedReceiptOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-4 sm:p-5 space-y-3.5 shadow-2xl border border-slate-200 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div>
+                <h3 className="font-bold text-base text-slate-900 flex items-center gap-1.5">
+                  <Printer className="w-4 h-4 text-orange-600" />
+                  <span>Struk Nota Pesanan</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Format struk kasir untuk <strong>{selectedReceiptOrder.userName}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReceiptModal}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Receipt Preview Box (Thermal Paper Look) */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="bg-white border border-slate-300 rounded-lg p-3.5 font-mono text-xs text-black shadow-inner leading-relaxed select-text space-y-1.5">
+                {/* Brand */}
+                <div className="text-center font-bold text-sm tracking-wide uppercase">
+                  {event.restaurantName || event.title}
+                </div>
+
+                <div className="border-t border-dashed border-black my-1" />
+
+                {/* Header: Tanggal & Pemesan */}
+                <div className="text-[11px] space-y-0.5">
+                  <div className="flex">
+                    <span className="w-16 shrink-0">Date</span>
+                    <span>: {event.date} {event.time ? event.time : ''}</span>
+                  </div>
+                  <div className="flex font-bold">
+                    <span className="w-16 shrink-0">Guest</span>
+                    <span>: {selectedReceiptOrder.userName}</span>
+                  </div>
+                </div>
+
+                <div className="border-t-2 border-dashed border-black my-1" />
+
+                {/* Menu Items */}
+                <div className="space-y-1.5 py-1">
+                  {selectedReceiptOrder.items.map((it, i) => (
+                    <div key={i} className="space-y-0.5">
+                      <div className="font-bold">{it.menuItemName}</div>
+                      {it.notes && event.allowItemNotes !== false && (
+                        <div className="text-[10px] text-slate-700 italic pl-2">
+                          * {it.notes}
+                        </div>
+                      )}
+                      <div className="flex justify-between pl-2 text-[11px]">
+                        <span>{it.quantity} x @{it.price.toLocaleString('id-ID')}</span>
+                        <span>{(it.quantity * it.price).toLocaleString('id-ID')}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-dashed border-black my-1" />
+
+                {/* Subtotal & PB1 */}
+                <div className="space-y-0.5 text-[11px]">
+                  <div className="flex justify-between">
+                    <span>Subtotal:</span>
+                    <span>{selectedReceiptOrder.subtotal.toLocaleString('id-ID')}</span>
+                  </div>
+                  {selectedReceiptOrder.taxAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>PB1 ({event.taxConfig.taxPercent}%):</span>
+                      <span>{selectedReceiptOrder.taxAmount.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                  {selectedReceiptOrder.serviceAmount > 0 && (
+                    <div className="flex justify-between">
+                      <span>Service ({event.taxConfig.serviceChargePercent}%):</span>
+                      <span>{selectedReceiptOrder.serviceAmount.toLocaleString('id-ID')}</span>
+                    </div>
+                  )}
+                  {selectedReceiptOrder.roundingAmount !== 0 && (
+                    <div className="flex justify-between">
+                      <span>Pembulatan:</span>
+                      <span>
+                        {selectedReceiptOrder.roundingAmount > 0
+                          ? `+${selectedReceiptOrder.roundingAmount.toLocaleString('id-ID')}`
+                          : selectedReceiptOrder.roundingAmount.toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t-2 border-dashed border-black my-1" />
+
+                {/* Grand Total */}
+                <div className="flex justify-between font-extrabold text-sm py-0.5">
+                  <span>Grand Total:</span>
+                  <span>{selectedReceiptOrder.totalAmount.toLocaleString('id-ID')}</span>
+                </div>
+
+                <div className="border-t border-dashed border-black my-1" />
+
+                {/* Payment Line */}
+                <div className="text-[11px] space-y-0.5">
+                  {selectedReceiptOrder.isPaid ? (
+                    selectedReceiptOrder.paymentMethod === 'cash' ? (
+                      <>
+                        <div className="flex justify-between font-bold">
+                          <span>CASH</span>
+                          <span>{(selectedReceiptOrder.paidAmount || selectedReceiptOrder.totalAmount).toLocaleString('id-ID')}</span>
+                        </div>
+                        {selectedReceiptOrder.changeAmount && selectedReceiptOrder.changeAmount > 0 ? (
+                          <div className="flex justify-between font-bold">
+                            <span>Cash Change:</span>
+                            <span>{selectedReceiptOrder.changeAmount.toLocaleString('id-ID')}</span>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex justify-between font-bold">
+                          <span>TRANSFER / QRIS</span>
+                          <span>{selectedReceiptOrder.totalAmount.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Status:</span>
+                          <span className="font-bold border border-black px-1 text-[10px]">LUNAS</span>
+                        </div>
+                      </>
+                    )
+                  ) : (
+                    <div className="flex justify-between">
+                      <span>Status:</span>
+                      <span className="font-bold border border-black px-1 text-[10px]">BELUM BAYAR</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t border-dashed border-black my-1" />
+
+                <div className="text-center text-[10px] tracking-widest pt-1">
+                  *** TERIMA KASIH ***
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex flex-col gap-2 border-t border-slate-100">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => printIndividualThermalReceipt(event, selectedReceiptOrder)}
+                  className="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <Printer className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Cetak (Print)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => exportSingleOrderToReceiptPdf(event, selectedReceiptOrder)}
+                  className="py-2.5 px-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Unduh PDF</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseReceiptModal}
+                className="py-2 px-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition text-center"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1382,3 +1382,446 @@ Yuk langsung pilih menu makanan & minuman masing-masing di link berikut:
 
 Terima kasih! 🙏`;
 }
+
+/**
+ * Format dokumen HTML struk nota kasir thermal (58mm / 80mm)
+ * Berisi informasi atas: Tanggal & Pemesan, tanpa footer kritik/saran.
+ */
+export function getThermalReceiptHtmlDocument(event: EventData, orders: UserOrder[]): string {
+  const dateStr = event.date + (event.time ? ` ${event.time}` : '');
+  const brandName = (event.restaurantName || event.title || 'NOTA PESANAN').toUpperCase();
+
+  const receiptsHtml = orders.map((order) => {
+    const itemsHtml = order.items
+      .map(
+        (it) => `
+        <div class="item-block">
+          <div class="item-name">${it.menuItemName}</div>
+          ${it.notes && event.allowItemNotes !== false ? `<div class="item-notes">* Catatan: ${it.notes}</div>` : ''}
+          <div class="item-calc">
+            <span>${it.quantity} x @${it.price.toLocaleString('id-ID')}</span>
+            <span>${(it.quantity * it.price).toLocaleString('id-ID')}</span>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    const calcLinesHtml = `
+      <div class="row">
+        <span>Subtotal:</span>
+        <span>${order.subtotal.toLocaleString('id-ID')}</span>
+      </div>
+      ${
+        order.taxAmount > 0
+          ? `<div class="row">
+              <span>PB1 (${event.taxConfig.taxPercent}%):</span>
+              <span>${order.taxAmount.toLocaleString('id-ID')}</span>
+            </div>`
+          : ''
+      }
+      ${
+        order.serviceAmount > 0
+          ? `<div class="row">
+              <span>Service (${event.taxConfig.serviceChargePercent}%):</span>
+              <span>${order.serviceAmount.toLocaleString('id-ID')}</span>
+            </div>`
+          : ''
+      }
+      ${
+        order.roundingAmount !== 0
+          ? `<div class="row">
+              <span>Pembulatan:</span>
+              <span>${order.roundingAmount > 0 ? `+${order.roundingAmount.toLocaleString('id-ID')}` : order.roundingAmount.toLocaleString('id-ID')}</span>
+            </div>`
+          : ''
+      }
+    `;
+
+    let paymentHtml = '';
+    if (order.isPaid) {
+      if (order.paymentMethod === 'cash') {
+        paymentHtml = `
+          <div class="row bold">
+            <span>CASH</span>
+            <span>${(order.paidAmount || order.totalAmount).toLocaleString('id-ID')}</span>
+          </div>
+          ${
+            order.changeAmount && order.changeAmount > 0
+              ? `<div class="row bold">
+                  <span>Cash Change:</span>
+                  <span>${order.changeAmount.toLocaleString('id-ID')}</span>
+                </div>`
+              : ''
+          }
+        `;
+      } else {
+        paymentHtml = `
+          <div class="row bold">
+            <span>TRANSFER / QRIS</span>
+            <span>${order.totalAmount.toLocaleString('id-ID')}</span>
+          </div>
+          <div class="row">
+            <span>Status:</span>
+            <span class="badge">LUNAS</span>
+          </div>
+        `;
+      }
+    } else {
+      paymentHtml = `
+        <div class="row">
+          <span>Status:</span>
+          <span class="badge">BELUM BAYAR</span>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="receipt-card">
+        <div class="brand">${brandName}</div>
+        <div class="divider-dash"></div>
+        <table class="meta-table">
+          <tr>
+            <td class="lbl">Date</td>
+            <td>: ${dateStr}</td>
+          </tr>
+          <tr>
+            <td class="lbl">Guest</td>
+            <td>: <strong>${order.userName}</strong></td>
+          </tr>
+        </table>
+        <div class="divider-double"></div>
+
+        <div class="items-wrap">
+          ${itemsHtml}
+        </div>
+
+        <div class="divider-dash"></div>
+        ${calcLinesHtml}
+        <div class="divider-double"></div>
+
+        <div class="row grand-total">
+          <span>Grand Total:</span>
+          <span>${order.totalAmount.toLocaleString('id-ID')}</span>
+        </div>
+        <div class="divider-dash"></div>
+
+        ${paymentHtml}
+        <div class="divider-dash"></div>
+
+        <div class="footer">
+          *** TERIMA KASIH ***
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+      <meta charset="UTF-8">
+      <title>Cetak Nota Pesanan - ${brandName}</title>
+      <style>
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+        }
+        body {
+          font-family: 'Courier New', Courier, 'Lucida Console', monospace;
+          background: #f8fafc;
+          color: #000;
+        }
+        .receipt-card {
+          width: 78mm;
+          max-width: 100%;
+          margin: 0 auto;
+          padding: 4mm 2mm;
+          background: #fff;
+          font-size: 12px;
+          line-height: 1.3;
+          page-break-after: always;
+          page-break-inside: avoid;
+        }
+        .brand {
+          text-align: center;
+          font-size: 15px;
+          font-weight: 900;
+          letter-spacing: 0.5px;
+          margin-bottom: 4px;
+        }
+        .divider-dash {
+          border-top: 1px dashed #000;
+          margin: 6px 0;
+        }
+        .divider-double {
+          border-top: 2px dashed #000;
+          margin: 6px 0;
+        }
+        .meta-table {
+          width: 100%;
+          font-size: 11.5px;
+        }
+        .meta-table td {
+          padding: 1px 0;
+        }
+        .meta-table .lbl {
+          width: 55px;
+        }
+        .items-wrap {
+          margin: 4px 0;
+        }
+        .item-block {
+          margin-bottom: 6px;
+        }
+        .item-name {
+          font-weight: bold;
+          font-size: 12px;
+        }
+        .item-notes {
+          font-size: 10.5px;
+          color: #333;
+          font-style: italic;
+          padding-left: 10px;
+          margin-top: 1px;
+        }
+        .item-calc {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11.5px;
+          padding-left: 10px;
+        }
+        .row {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11.5px;
+          padding: 1px 0;
+        }
+        .row.bold {
+          font-weight: bold;
+          font-size: 12px;
+        }
+        .row.grand-total {
+          font-size: 14px;
+          font-weight: 900;
+          padding: 3px 0;
+        }
+        .badge {
+          font-weight: bold;
+          border: 1px solid #000;
+          padding: 0 4px;
+          font-size: 10px;
+        }
+        .footer {
+          text-align: center;
+          margin-top: 8px;
+          font-size: 10.5px;
+          letter-spacing: 1px;
+        }
+
+        @media print {
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+          body {
+            background: #fff;
+          }
+          .receipt-card {
+            box-shadow: none;
+            border: none;
+            padding: 3mm 2mm;
+          }
+        }
+        @media screen {
+          body {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+          }
+          .receipt-card {
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          }
+        }
+      </style>
+    </head>
+    <body>
+      ${receiptsHtml}
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Cetak satu struk nota pemesan langsung via print dialog (format thermal receipt)
+ */
+export function printIndividualThermalReceipt(event: EventData, order: UserOrder) {
+  const printWindow = window.open('', '_blank', 'width=420,height=650');
+  if (!printWindow) {
+    alert('Pop-up terblokir oleh browser Anda. Mohon izinkan pop-up untuk mencetak nota.');
+    return;
+  }
+  printWindow.document.write(getThermalReceiptHtmlDocument(event, [order]));
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 350);
+}
+
+/**
+ * Cetak seluruh struk nota pemesan sekaligus (batch print thermal)
+ */
+export function printAllIndividualThermalReceipts(event: EventData, orders: UserOrder[]) {
+  if (orders.length === 0) {
+    alert('Tidak ada pesanan untuk dicetak.');
+    return;
+  }
+  const printWindow = window.open('', '_blank', 'width=420,height=650');
+  if (!printWindow) {
+    alert('Pop-up terblokir oleh browser Anda. Mohon izinkan pop-up untuk mencetak nota.');
+    return;
+  }
+  printWindow.document.write(getThermalReceiptHtmlDocument(event, orders));
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+  }, 350);
+}
+
+/**
+ * Download PDF struk kasir thermal 80mm untuk 1 karyawan
+ */
+export function exportSingleOrderToReceiptPdf(event: EventData, order: UserOrder) {
+  const itemsHeight = order.items.reduce((acc, it) => acc + (it.notes ? 13 : 8.5), 0);
+  const totalHeightMm = Math.max(115, 52 + itemsHeight + 48);
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [80, totalHeightMm],
+  });
+
+  const pageWidth = 80;
+  const margin = 4;
+  let y = 8;
+
+  // Nama Brand Resto
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(11);
+  const brand = (event.restaurantName || event.title || 'NOTA PESANAN').toUpperCase();
+  doc.text(brand, pageWidth / 2, y, { align: 'center', maxWidth: 72 });
+  y += 5.5;
+
+  // Divider dash
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('----------------------------------------', pageWidth / 2, y, { align: 'center' });
+  y += 4.5;
+
+  // Meta: Date & Guest
+  const dateStr = event.date + (event.time ? ` ${event.time}` : '');
+  doc.text(`Date : ${dateStr}`, margin, y);
+  y += 4;
+  doc.setFont('courier', 'bold');
+  doc.text(`Guest: ${order.userName}`, margin, y);
+  doc.setFont('courier', 'normal');
+  y += 4;
+
+  // Divider double
+  doc.text('========================================', pageWidth / 2, y, { align: 'center' });
+  y += 4.5;
+
+  // Menu Items
+  order.items.forEach((it) => {
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(8.5);
+    doc.text(it.menuItemName, margin, y, { maxWidth: 72 });
+    y += 4;
+
+    if (it.notes && event.allowItemNotes !== false) {
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`* ${it.notes}`, margin + 3, y, { maxWidth: 68 });
+      y += 3.5;
+    }
+
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(`  ${it.quantity} x @${it.price.toLocaleString('id-ID')}`, margin, y);
+    doc.text((it.quantity * it.price).toLocaleString('id-ID'), pageWidth - margin, y, { align: 'right' });
+    y += 4.5;
+  });
+
+  // Divider
+  doc.text('----------------------------------------', pageWidth / 2, y, { align: 'center' });
+  y += 4.5;
+
+  const printCalcLine = (label: string, val: string, isBold: boolean = false, fontSize: number = 8.5) => {
+    doc.setFont('courier', isBold ? 'bold' : 'normal');
+    doc.setFontSize(fontSize);
+    doc.text(label, margin, y);
+    doc.text(val, pageWidth - margin, y, { align: 'right' });
+    y += 4.5;
+  };
+
+  printCalcLine('Subtotal:', order.subtotal.toLocaleString('id-ID'));
+  if (order.taxAmount > 0) {
+    printCalcLine(`PB1 (${event.taxConfig.taxPercent}%):`, order.taxAmount.toLocaleString('id-ID'));
+  }
+  if (order.serviceAmount > 0) {
+    printCalcLine(`Service (${event.taxConfig.serviceChargePercent}%):`, order.serviceAmount.toLocaleString('id-ID'));
+  }
+  if (order.roundingAmount !== 0) {
+    printCalcLine(
+      'Pembulatan:',
+      order.roundingAmount > 0 ? `+${order.roundingAmount.toLocaleString('id-ID')}` : order.roundingAmount.toLocaleString('id-ID')
+    );
+  }
+
+  // Divider double
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('========================================', pageWidth / 2, y, { align: 'center' });
+  y += 4.5;
+
+  // Grand Total
+  printCalcLine('Grand Total:', order.totalAmount.toLocaleString('id-ID'), true, 10.5);
+
+  // Divider dash
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('----------------------------------------', pageWidth / 2, y, { align: 'center' });
+  y += 4.5;
+
+  // Payment
+  if (order.isPaid) {
+    if (order.paymentMethod === 'cash') {
+      printCalcLine('CASH', (order.paidAmount || order.totalAmount).toLocaleString('id-ID'), true);
+      if (order.changeAmount && order.changeAmount > 0) {
+        printCalcLine('Cash Change:', order.changeAmount.toLocaleString('id-ID'), true);
+      }
+    } else {
+      printCalcLine('TRANSFER / QRIS', order.totalAmount.toLocaleString('id-ID'), true);
+      printCalcLine('Status:', 'LUNAS', true);
+    }
+  } else {
+    printCalcLine('Status:', 'BELUM BAYAR', true);
+  }
+
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8.5);
+  doc.text('----------------------------------------', pageWidth / 2, y, { align: 'center' });
+  y += 5;
+
+  doc.setFontSize(8);
+  doc.text('*** TERIMA KASIH ***', pageWidth / 2, y, { align: 'center' });
+
+  const cleanName = order.userName.replace(/[^a-zA-Z0-9]/g, '_');
+  doc.save(`Nota_${cleanName}_${event.date}.pdf`);
+}
