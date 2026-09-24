@@ -1,4 +1,87 @@
 {
-  "events": {},
-  "orders": {}
+  "events": {
+    "makan-siang-kamis-g18z2": {
+      "id": "makan-siang-kamis-g18z2",
+      "adminPin": "4664",
+      "title": "Makan Siang Kamis",
+      "picName": "Sarah",
+      "date": "2026-09-17",
+      "time": "12:30",
+      "restaurantName": "Soto Betawi H. Mamat",
+      "restaurantAddress": "",
+      "taxConfig": {
+        "useTax": true,
+        "taxPercent": 10,
+        "useServiceCharge": false,
+        "serviceChargePercent": 0,
+        "rounding": "none"
+      },
+      "menuItems": [
+        {
+          "id": "m1",
+          "name": "Soto Daging",
+          "price": 35000,
+          "category": "Makanan"
+        }
+      ],
+      "isLocked": false,
+      "createdAt": "2026-09-17T02:41:23.472Z",
+      "updatedAt": "2026-09-17T02:41:23.473Z"
+    },
+    "makan-malam-test-delete-cnbkv": {
+      "id": "makan-malam-test-delete-cnbkv",
+      "adminPin": "2238",
+      "title": "Makan Malam Test Delete",
+      "picName": "Sarah",
+      "date": "2026-09-17",
+      "time": "19:00",
+      "restaurantName": "Sate Khas Senayan",
+      "restaurantAddress": "",
+      "taxConfig": {
+        "useTax": true,
+        "taxPercent": 10,
+        "useServiceCharge": false,
+        "serviceChargePercent": 0,
+        "rounding": "none"
+      },
+      "menuItems": [
+        {
+          "id": "m1",
+          "name": "Sate Ayam",
+          "price": 40000,
+          "category": "Makanan"
+        }
+      ],
+      "isLocked": false,
+      "createdAt": "2026-09-17T02:52:37.195Z",
+      "updatedAt": "2026-09-17T02:52:37.195Z"
+    }
+  },
+  "orders": {
+    "makan-siang-kamis-g18z2": [
+      {
+        "id": "ord_FDAIJzcm",
+        "eventId": "makan-siang-kamis-g18z2",
+        "userName": "Doni",
+        "items": [
+          {
+            "menuItemId": "m1",
+            "menuItemName": "Soto Daging",
+            "price": 35000,
+            "quantity": 2,
+            "notes": "Tanpa jeroan"
+          }
+        ],
+        "subtotal": 70000,
+        "taxAmount": 7000,
+        "serviceAmount": 0,
+        "roundingAmount": 0,
+        "totalAmount": 77000,
+        "isPaid": false,
+        "createdAt": "2026-09-17T02:41:23.489Z",
+        "updatedAt": "2026-09-17T02:41:23.489Z"
+      }
+    ],
+    "makan-malam-test-delete-cnbkv": []
+  }
 }

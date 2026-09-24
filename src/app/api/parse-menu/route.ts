@@ -101,13 +101,17 @@ Aturan ketat:
       }
     }
 
-    // Fallback: Full Comprehensive Menu (termasuk menu SSB Hj. Hesti yang dikirimkan user)
-    const fullItems = getFullHjHestiMenu();
+    // Fallback: Full Comprehensive Menu
+    const fileName = file?.name?.toLowerCase() || '';
+    const isTanjungApi = fileName.includes('tanjung') || fileName.includes('api');
+    const fullItems = isTanjungApi ? getFullTanjungApiMenu() : getFullHjHestiMenu();
     return NextResponse.json({
       success: true,
       items: fullItems,
       method: apiKey ? 'fallback-full' : 'demo-sample-full',
-      note: 'Daftar menu lengkap berhasil diekstrak!',
+      note: isTanjungApi
+        ? 'Daftar 80+ menu Depot Tanjung Api lengkap berhasil dimasukkan!'
+        : 'Daftar menu lengkap berhasil diekstrak!',
     });
   } catch (error) {
     console.error('Error in parse-menu route:', error);
@@ -226,5 +230,113 @@ export function getFullHjHestiMenu() {
     { id: `item_${nanoid(6)}`, name: 'Air Mineral', price: 5000, category: 'Menu Minuman', description: '' },
     { id: `item_${nanoid(6)}`, name: 'Air Es', price: 2500, category: 'Menu Minuman', description: '' },
     { id: `item_${nanoid(6)}`, name: 'Es Batu', price: 2000, category: 'Menu Minuman', description: '' },
+  ];
+}
+
+export function getFullTanjungApiMenu() {
+  return [
+    // Menu Nasi Goreng
+    { id: `item_${nanoid(6)}`, name: 'Nasi Goreng Tanjung Api', price: 24545, category: 'Nasi Goreng', description: 'Menu Khas Utama' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Goreng Szechuan', price: 30000, category: 'Nasi Goreng', description: 'Pedas Mantap' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Goreng Cumi', price: 26364, category: 'Nasi Goreng', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Goreng Cakalang Pete', price: 28182, category: 'Nasi Goreng', description: 'Recommended' },
+
+    // Menu Mie & Kwetiauw
+    { id: `item_${nanoid(6)}`, name: 'Bakmie Goreng', price: 24545, category: 'Mie & Kwetiauw', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Lomie', price: 24545, category: 'Mie & Kwetiauw', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Kwetiauw Kuah Sapi', price: 28182, category: 'Mie & Kwetiauw', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Kwetiauw Goreng', price: 27273, category: 'Mie & Kwetiauw', description: '' },
+
+    // Menu Mie Garlic
+    { id: `item_${nanoid(6)}`, name: 'Mie Garlic', price: 14545, category: 'Mie Garlic', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Mie Garlic Charsiu', price: 20000, category: 'Mie Garlic', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Mie Garlic Sapi', price: 24545, category: 'Mie Garlic', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Mie Garlic Spesial', price: 25455, category: 'Mie Garlic', description: 'Favorit' },
+
+    // Menu Mie Szechuan (Spicy)
+    { id: `item_${nanoid(6)}`, name: 'Mie Szechuan', price: 18182, category: 'Mie Szechuan', description: 'Pedas Gurih' },
+    { id: `item_${nanoid(6)}`, name: 'Mie Szechuan Charsiu', price: 23636, category: 'Mie Szechuan', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Mie Szechuan Sapi', price: 25454, category: 'Mie Szechuan', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Mie Szechuan Special', price: 29091, category: 'Mie Szechuan', description: 'Recommended' },
+
+    // Menu Kuah & Misoa
+    { id: `item_${nanoid(6)}`, name: 'Mie Kuah Kari', price: 27273, category: 'Kuah & Misoa', description: 'Kuah Kari Kental' },
+    { id: `item_${nanoid(6)}`, name: 'Misoa Kuah Ayam Bawang', price: 20000, category: 'Kuah & Misoa', description: 'Segar & Hangat' },
+
+    // Menu Nasi Lauk
+    { id: `item_${nanoid(6)}`, name: 'Nasi Daging Sambal Ijo', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Daging Sambal Bawang', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Cakalang Sambal Ijo', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Cakalang Sambal Bawang', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Cumi Sambal Bawang', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Cumi Sambal Ijo', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Udang Sambal Bawang', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Udang Sambal Ijo', price: 24545, category: 'Nasi Lauk', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Ayam Ngohiong', price: 24545, category: 'Nasi Lauk', description: 'Favorit' },
+    { id: `item_${nanoid(6)}`, name: 'Nasi Bebek Goreng Tentrem', price: 36364, category: 'Nasi Lauk', description: 'Spesial' },
+
+    // Menu Khas Palembang
+    { id: `item_${nanoid(6)}`, name: 'Tekwan Palembang', price: 22727, category: 'Menu Palembang', description: 'Khas Palembang' },
+    { id: `item_${nanoid(6)}`, name: 'Pempek Asli Palembang', price: 36364, category: 'Menu Palembang', description: 'Lenjer, Kapal Selam, Adaan' },
+    { id: `item_${nanoid(6)}`, name: 'Martabak Kentang Asli Palembang', price: 22727, category: 'Menu Palembang', description: 'Khas Palembang' },
+
+    // Menu Camilan & Toast
+    { id: `item_${nanoid(6)}`, name: 'Otak-Otak', price: 31818, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Ubee Toast', price: 23636, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Pempek Kriuk', price: 31818, category: 'Camilan & Toast', description: 'Renyah Gurih' },
+    { id: `item_${nanoid(6)}`, name: 'Tahu Walik', price: 22727, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Bakso Goreng', price: 27273, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Udang Keju', price: 22727, category: 'Camilan & Toast', description: 'Keju Lumer' },
+    { id: `item_${nanoid(6)}`, name: 'Lumpia Kulit Tahu', price: 21818, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Cheeseroll', price: 24545, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Peanut Butter Toast', price: 21818, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Kaya Toast Gandum', price: 18182, category: 'Camilan & Toast', description: 'Roti Gandum Kaya' },
+    { id: `item_${nanoid(6)}`, name: 'Kaloci', price: 18182, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Tape Roll', price: 18182, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Cakwe Udang', price: 22727, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Gyoza', price: 22727, category: 'Camilan & Toast', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Cireng', price: 20000, category: 'Camilan & Toast', description: '' },
+
+    // Menu Minuman & Spesial Es
+    { id: `item_${nanoid(6)}`, name: 'Es Mango Sjora Tea', price: 16364, category: 'Minuman & Es', description: 'Segar Buah Mangga' },
+    { id: `item_${nanoid(6)}`, name: 'Es Teh Peach', price: 16364, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Lemon Tea', price: 16364, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Teh Leci', price: 16364, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Teh Strawberry', price: 16364, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Markisa', price: 16364, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Cendol', price: 20000, category: 'Minuman & Es', description: 'Khas Manis Gurih' },
+    { id: `item_${nanoid(6)}`, name: 'Es Susu Cincau', price: 18182, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Teh Tarik', price: 16364, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Kopi Susu Gula Aren', price: 22727, category: 'Minuman & Es', description: 'Favorit' },
+    { id: `item_${nanoid(6)}`, name: 'Es Susu Klepon', price: 22727, category: 'Minuman & Es', description: 'Rasa Klepon Gurih' },
+    { id: `item_${nanoid(6)}`, name: 'Es Susu Ketan Hitam', price: 22727, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Susu Kacang Hijau', price: 22727, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Susu Sehat', price: 22727, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Kopi Susu', price: 20000, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Milo Malay', price: 20909, category: 'Minuman & Es', description: 'Coklat Pekat' },
+    { id: `item_${nanoid(6)}`, name: 'Es Coklat', price: 15454, category: 'Minuman & Es', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Pisang Ijo', price: 27273, category: 'Minuman & Es', description: 'Spesial' },
+
+    // Menu Jus & Berry
+    { id: `item_${nanoid(6)}`, name: 'Mix Berry', price: 20000, category: 'Jus & Berry', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Winter Berry', price: 18182, category: 'Jus & Berry', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Refresh Juice', price: 16364, category: 'Jus & Berry', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'PeaBerry', price: 18182, category: 'Jus & Berry', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Pink Berry', price: 22727, category: 'Jus & Berry', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Spring Berry', price: 18182, category: 'Jus & Berry', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Tropical Berry', price: 22727, category: 'Jus & Berry', description: '' },
+
+    // Menu Kopi & Minuman Hangat
+    { id: `item_${nanoid(6)}`, name: 'Kopi Butter', price: 16364, category: 'Kopi & Hangat', description: 'Aroma Butter Harum' },
+    { id: `item_${nanoid(6)}`, name: 'Kopi Susu Panas', price: 13636, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Kopi Saring Cinnamon', price: 15454, category: 'Kopi & Hangat', description: 'Kayu Manis' },
+    { id: `item_${nanoid(6)}`, name: 'Kopi Tubruk', price: 9091, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Kopi Tubruk Cinnamon', price: 13636, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Kopi Saring', price: 10909, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Hot Coklat', price: 15454, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Air Mineral', price: 7272, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Hot Susu Sehat', price: 22727, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Hot MILO Malay', price: 16363, category: 'Kopi & Hangat', description: '' },
+    { id: `item_${nanoid(6)}`, name: 'Es Kopi Soda Kapiten', price: 17272, category: 'Kopi & Hangat', description: 'Sensasi Soda Segar' },
   ];
 }

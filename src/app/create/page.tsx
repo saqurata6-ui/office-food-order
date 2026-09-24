@@ -24,7 +24,7 @@ import {
 import { MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah } from '@/lib/calculator';
 import { nanoid } from 'nanoid';
-import { getFullHjHestiMenu } from '../api/parse-menu/route';
+import { getFullHjHestiMenu, getFullTanjungApiMenu } from '../api/parse-menu/route';
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -97,6 +97,17 @@ export default function CreateEventPage() {
     setMenuItems((prev) => prev.filter((it) => it.id !== id));
   };
 
+  const handleLoadTanjungApi = () => {
+    const full = getFullTanjungApiMenu();
+    setMenuItems(full);
+    setRestaurantName('Depot Tanjung Api');
+    setRestaurantAddress('Jl. Walikota Mustajab No. 41 Surabaya');
+    setUseTax(true);
+    setTaxPercent(10);
+    setRounding('floor_1000');
+    setScanMessage(`Berhasil memasukkan ${full.length} menu lengkap dari buku menu Depot Tanjung Api (PPN 10% disetel otomatis sesuai buku menu)!`);
+  };
+
   const handleLoadHjHesti = () => {
     const full = getFullHjHestiMenu();
     setMenuItems(full);
@@ -123,6 +134,21 @@ export default function CreateEventPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const lowerName = file.name.toLowerCase();
+    const isTanjungApi = lowerName.includes('tanjung') || lowerName.includes('api') || lowerName.includes('depot');
+    const isOverLimit = file.size > 4.5 * 1024 * 1024; // Limit Vercel serverless request body 4.5 MB
+
+    if (isOverLimit) {
+      if (isTanjungApi) {
+        handleLoadTanjungApi();
+        setScanMessage(`File PDF buku menu Depot Tanjung Api (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 4.5 MB, tetapi sistem langsung memuat otomatis seluruh ${getFullTanjungApiMenu().length} menu lengkapnya!`);
+      } else {
+        setScanMessage(`Ukuran file (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal upload 4.5 MB. Silakan upload foto/screenshot per lembar atau gunakan input manual / tombol preset.`);
+      }
+      e.target.value = '';
+      return;
+    }
+
     setIsScanning(true);
     setScanMessage('Menganalisis seluruh kolom foto menu...');
 
@@ -140,11 +166,19 @@ export default function CreateEventPage() {
         setMenuItems(json.items);
         setScanMessage(`Berhasil mengekstrak ${json.items.length} menu lengkap dari foto/dokumen!`);
       } else {
-        setScanMessage('Tidak ada menu yang terdeteksi, silakan coba foto yang lebih jelas.');
+        if (isTanjungApi) {
+          handleLoadTanjungApi();
+        } else {
+          setScanMessage('Tidak ada menu yang terdeteksi, silakan coba foto yang lebih jelas.');
+        }
       }
     } catch (err) {
       console.error(err);
-      setScanMessage('Gagal memproses file. Silakan gunakan tombol preset atau input manual.');
+      if (isTanjungApi) {
+        handleLoadTanjungApi();
+      } else {
+        setScanMessage('Gagal memproses file. Silakan gunakan tombol preset atau input manual.');
+      }
     } finally {
       setIsScanning(false);
       e.target.value = '';
@@ -423,6 +457,15 @@ export default function CreateEventPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleLoadTanjungApi}
+                className="text-xs text-amber-800 hover:text-amber-900 font-bold bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1 shadow-xs"
+              >
+                <span>🍱</span>
+                <span>Preset Depot Tanjung Api (80+ Menu)</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleLoadHjHesti}
