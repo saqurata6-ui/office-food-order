@@ -764,7 +764,7 @@ export default function OrderPage() {
                       )}
                     </div>
                     {item.description && (
-                      <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
+                      <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">
                         {item.description}
                       </p>
                     )}

@@ -626,6 +626,16 @@ export default function CreateEventPage() {
                   Tambah
                 </button>
               </div>
+
+              <div className="sm:col-span-12">
+                <input
+                  type="text"
+                  placeholder="Keterangan / komposisi menu jika ada (opsional, misal: Nasi, Cumi, Sambal Bawang, Telur Mata Sapi)"
+                  value={newItemDesc}
+                  onChange={(e) => setNewItemDesc(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 placeholder:text-slate-400"
+                />
+              </div>
             </div>
           </div>
 
@@ -655,12 +665,21 @@ export default function CreateEventPage() {
                     key={item.id || idx}
                     className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50 transition text-xs"
                   >
-                    <div className="flex items-center gap-2 overflow-hidden pr-2">
-                      <span className="w-6 text-slate-400 font-mono shrink-0">{idx + 1}.</span>
-                      <span className="font-semibold text-slate-900 truncate">{item.name}</span>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] shrink-0 font-medium">
-                        {item.category}
-                      </span>
+                    <div className="flex items-start gap-2 overflow-hidden pr-2">
+                      <span className="w-6 text-slate-400 font-mono shrink-0 pt-0.5">{idx + 1}.</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-slate-900">{item.name}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] shrink-0 font-medium">
+                            {item.category}
+                          </span>
+                        </div>
+                        {item.description && (
+                          <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 italic">
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-3 shrink-0">
