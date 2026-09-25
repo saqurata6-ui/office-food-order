@@ -5,6 +5,7 @@ export interface MenuItem {
   category: string;
   description?: string;
   imageUrl?: string;
+  box_2d?: [number, number, number, number];
 }
 
 export type RoundingType =

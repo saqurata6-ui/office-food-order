@@ -133,59 +133,160 @@ export default function CreateEventPage() {
     setMenuItems(samples);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const lowerName = file.name.toLowerCase();
-    const isTanjungApi = lowerName.includes('tanjung') || lowerName.includes('api') || lowerName.includes('depot');
-    const isOverLimit = file.size > 4.5 * 1024 * 1024; // Limit Vercel serverless request body 4.5 MB
-
-    if (isOverLimit) {
-      if (isTanjungApi) {
-        handleLoadTanjungApi();
-        setScanMessage(`File PDF buku menu Depot Tanjung Api (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 4.5 MB, tetapi sistem langsung memuat otomatis seluruh ${getFullTanjungApiMenu().length} menu lengkapnya!`);
-      } else {
-        setScanMessage(`Ukuran file (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas maksimal upload 4.5 MB. Silakan upload foto/screenshot per lembar atau gunakan input manual / tombol preset.`);
-      }
-      e.target.value = '';
+async function cropImageWithCanvas(file: File, box: [number, number, number, number]): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) {
+      resolve('');
       return;
     }
 
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const [ymin, xmin, ymax, xmax] = box;
+          const origW = img.naturalWidth || img.width;
+          const origH = img.naturalHeight || img.height;
+
+          // Convert normalized (0..1000) coordinates to pixels
+          let sx = (xmin / 1000) * origW;
+          let sy = (ymin / 1000) * origH;
+          let sWidth = ((xmax - xmin) / 1000) * origW;
+          let sHeight = ((ymax - ymin) / 1000) * origH;
+
+          if (sWidth <= 15 || sHeight <= 15) {
+            resolve('');
+            return;
+          }
+
+          const canvas = document.createElement('canvas');
+          const targetSize = 320;
+          const aspect = sWidth / sHeight;
+          if (aspect > 1) {
+            canvas.width = targetSize;
+            canvas.height = Math.round(targetSize / aspect);
+          } else {
+            canvas.height = targetSize;
+            canvas.width = Math.round(targetSize * aspect);
+          }
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve('');
+            return;
+          }
+
+          ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/webp', 0.85);
+          resolve(dataUrl);
+        } catch (err) {
+          console.error('Error cropping image:', err);
+          resolve('');
+        }
+      };
+      img.onerror = () => resolve('');
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(file);
+  });
+}
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (files.length === 0) return;
+
     setIsScanning(true);
-    setScanMessage('Menganalisis seluruh kolom foto menu...');
+    let extractedTotal: MenuItem[] = [];
+    let photosCroppedCount = 0;
 
-    const formData = new FormData();
-    formData.append('file', file);
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const lowerName = file.name.toLowerCase();
+      const isTanjungApi = lowerName.includes('tanjung') || lowerName.includes('api') || lowerName.includes('depot');
+      const isOverLimit = file.size > 4.5 * 1024 * 1024; // Limit Vercel serverless request body 4.5 MB
 
-    try {
-      const res = await fetch('/api/parse-menu', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const json = await res.json();
-      if (json.success && json.items?.length > 0) {
-        setMenuItems(json.items);
-        setScanMessage(`Berhasil mengekstrak ${json.items.length} menu lengkap dari foto/dokumen!`);
-      } else {
+      if (isOverLimit) {
         if (isTanjungApi) {
           handleLoadTanjungApi();
+          setScanMessage(`File PDF buku menu Depot Tanjung Api (${(file.size / (1024 * 1024)).toFixed(1)} MB) langsung dimuat otomatis (${getFullTanjungApiMenu().length} menu lengkap + foto)!`);
+          setIsScanning(false);
+          e.target.value = '';
+          return;
         } else {
-          setScanMessage('Tidak ada menu yang terdeteksi, silakan coba foto yang lebih jelas.');
+          setScanMessage(`Ukuran file "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) melebihi batas 4.5 MB. Silakan upload screenshot per lembar atau gunakan input manual / tombol preset.`);
+          continue;
         }
       }
-    } catch (err) {
-      console.error(err);
-      if (isTanjungApi) {
-        handleLoadTanjungApi();
-      } else {
-        setScanMessage('Gagal memproses file. Silakan gunakan tombol preset atau input manual.');
+
+      setScanMessage(
+        files.length > 1
+          ? `Menganalisis file ke-${i + 1} dari ${files.length} (${file.name})...`
+          : 'Menganalisis menu & mendeteksi foto hidangan otomatis...'
+      );
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/parse-menu', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const json = await res.json();
+        if (json.success && json.items?.length > 0) {
+          // Process auto-cropping on client canvas for items with box_2d
+          const processedItems: MenuItem[] = [];
+          for (const rawItem of json.items) {
+            let imgUrl = rawItem.imageUrl;
+            if (!imgUrl && rawItem.box_2d && file.type.startsWith('image/')) {
+              setScanMessage(`Memotong foto hidangan: ${rawItem.name}...`);
+              const cropped = await cropImageWithCanvas(file, rawItem.box_2d);
+              if (cropped) {
+                imgUrl = cropped;
+                photosCroppedCount++;
+              }
+            }
+            processedItems.push({
+              ...rawItem,
+              imageUrl: imgUrl,
+            });
+          }
+          extractedTotal.push(...processedItems);
+        } else {
+          if (isTanjungApi) {
+            handleLoadTanjungApi();
+            setIsScanning(false);
+            e.target.value = '';
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        if (isTanjungApi) {
+          handleLoadTanjungApi();
+          setIsScanning(false);
+          e.target.value = '';
+          return;
+        }
       }
-    } finally {
-      setIsScanning(false);
-      e.target.value = '';
     }
+
+    if (extractedTotal.length > 0) {
+      setMenuItems((prev) => [...prev, ...extractedTotal]);
+      setScanMessage(
+        photosCroppedCount > 0
+          ? `Berhasil mengekstrak ${extractedTotal.length} menu (${photosCroppedCount} foto hidangan berhasil dipotong otomatis)!`
+          : `Berhasil mengekstrak ${extractedTotal.length} menu lengkap dari foto/dokumen!`
+      );
+    } else {
+      setScanMessage('Tidak ada menu yang terdeteksi, silakan coba foto yang lebih jelas.');
+    }
+
+    setIsScanning(false);
+    e.target.value = '';
   };
 
   const handleTextImport = async () => {
@@ -500,15 +601,16 @@ export default function CreateEventPage() {
                 <UploadCloud className="w-6 h-6 text-orange-500 shrink-0" />
                 <div className="text-left overflow-hidden">
                   <span className="block text-xs font-bold text-slate-800">
-                    Upload Foto Screenshot Menu / PDF
+                    Upload Foto Menu / PDF (Bisa Banyak Foto)
                   </span>
                   <span className="block text-[11px] text-slate-500 truncate">
-                    Mengekstrak seluruh kolom menu sekaligus
+                    Ekstrak menu & potong foto hidangan otomatis
                   </span>
                 </div>
                 <input
                   type="file"
                   accept="image/*,application/pdf"
+                  multiple
                   className="hidden"
                   onChange={handleFileUpload}
                   disabled={isScanning}

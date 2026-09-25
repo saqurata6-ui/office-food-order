@@ -34,25 +34,30 @@ export async function POST(req: NextRequest) {
         const base64Data = buffer.toString('base64');
 
         const prompt = `
-Anda adalah ahli ekstraksi OCR dan data menu restoran.
-Tugas Anda adalah membaca SELURUH teks di dokumen/foto daftar menu ini secara lengkap tanpa melewatkan SATU PUN item menu.
-Perhatikan bahwa menu ini mungkin memiliki beberapa kolom (misal Kolom Kiri: Menu Makanan & Menu Sate, Kolom Kanan: Menu Gorengan & Menu Minuman). Ekstrak SEMUANYA.
+Anda adalah ahli ekstraksi data menu restoran dan deteksi foto makanan.
+Tugas Anda:
+1. Membaca SELURUH teks di dokumen/foto daftar menu ini secara lengkap tanpa melewatkan SATU PUN item menu (nama, harga, kategori, komposisi/keterangan).
+2. Mendeteksi letak foto piring/mangkuk/gelas hidangan makanan atau minuman yang bersangkutan jika ada di foto.
 
 Kembalikan SELURUH menu dalam format array JSON murni:
 [
   {
     "name": "Nama Menu",
     "price": 12000,
-    "category": "Kategori (contoh: Makanan, Sate, Gorengan, Minuman, Lainnya)",
-    "description": "Keterangan / bahan / komposisi detail jika ada di buku menu (contoh: Nasi, Ayam, Telur Mata Sapi). Jika tidak ada, kosongkan (\"\")"
+    "category": "Kategori (contoh: Makanan, Minuman, Sate, Gorengan, Lainnya)",
+    "description": "Keterangan / bahan / komposisi detail jika ada di buku menu (contoh: Nasi, Ayam, Telur Mata Sapi). Jika tidak ada, kosongkan (\"\")",
+    "box_2d": [ymin, xmin, ymax, xmax]
   }
 ]
 
 Aturan ketat:
 1. 'price' harus angka integer bulat murni dalam Rupiah tanpa titik/koma/simbol Rp (misal 12000, 2500, 50000).
-2. Jangan batasi hanya 5 atau 10 item! Ekstrak semua baris item yang tertera di gambar (bisa mencapai 30-80 item).
-3. Jika terdapat rincian bahan/komposisi/keterangan makanan di bawah nama menu, sertakan di 'description'. Jika restoran tidak menyertakan keterangan, isi dengan string kosong "".
-4. Hanya kembalikan array JSON murni, jangan ada kata pengantar atau penutup.
+2. 'box_2d' adalah koordinat 2D bounding box area foto makanan/minuman tersebut dalam format normalized 0 sampai 1000 [ymin, xmin, ymax, xmax].
+   - Jika terdapat foto hidangan untuk menu tersebut di foto dokumen, berikan kotak fotonya secara presisi.
+   - Jika menu TIDAK memiliki foto khusus (hanya berupa teks nama/harga), isi 'box_2d' dengan null.
+3. Jangan batasi hanya 5 atau 10 item! Ekstrak semua baris item yang tertera di gambar (bisa mencapai 30-80 item).
+4. Jika terdapat rincian bahan/komposisi/keterangan makanan di bawah nama menu, sertakan di 'description'. Jika tidak ada, isi string kosong "".
+5. Hanya kembalikan array JSON murni, jangan ada kata pengantar atau penutup.
 `;
 
         const response = await ai.models.generateContent({
@@ -87,6 +92,9 @@ Aturan ketat:
               price: Number(it.price) || 0,
               category: String(it.category || 'Makanan').trim(),
               description: it.description ? String(it.description).trim() : '',
+              box_2d: Array.isArray(it.box_2d) && it.box_2d.length === 4
+                ? (it.box_2d.map(Number) as [number, number, number, number])
+                : undefined,
             }))
           : [];
 
