@@ -28,6 +28,7 @@ import {
   X,
   Eye,
   FileText,
+  ZoomIn,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
@@ -54,6 +55,7 @@ export default function OrderPage() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [showTaxEstimate, setShowTaxEstimate] = useState(false);
   const [lastSavedInfo, setLastSavedInfo] = useState<{ userName: string; totalAmount: number } | null>(null);
+  const [zoomImage, setZoomImage] = useState<{ url: string; title: string } | null>(null);
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -751,7 +753,26 @@ export default function OrderPage() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  {/* Left: Info Menu */}
+                  {/* Optional Photo Thumbnail */}
+                  {item.imageUrl && (
+                    <div
+                      onClick={() => setZoomImage({ url: item.imageUrl!, title: item.name })}
+                      className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 bg-slate-100 border border-slate-200 cursor-pointer relative group/img shadow-2xs"
+                      title="Klik untuk memperbesar foto"
+                    >
+                      <img
+                        src={item.imageUrl}
+                        alt={item.name}
+                        className="w-full h-full object-cover group-hover/img:scale-105 transition duration-200"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-black/25 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center">
+                        <ZoomIn className="w-4 h-4 text-white drop-shadow" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Info Menu */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <h3 className="font-bold text-xs sm:text-sm text-slate-900 leading-tight">
@@ -1127,6 +1148,46 @@ export default function OrderPage() {
                   <Lock className="w-3.5 h-3.5" /> Terkunci
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Zoom Foto Menu */}
+      {zoomImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setZoomImage(null)}
+        >
+          <div
+            className="bg-white rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-3.5 border-b border-slate-100 flex items-center justify-between">
+              <h4 className="font-bold text-sm text-slate-800 truncate pr-2">{zoomImage.title}</h4>
+              <button
+                type="button"
+                onClick={() => setZoomImage(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-slate-950 aspect-square w-full flex items-center justify-center overflow-hidden">
+              <img
+                src={zoomImage.url}
+                alt={zoomImage.title}
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div className="p-3 bg-slate-50 text-center">
+              <button
+                type="button"
+                onClick={() => setZoomImage(null)}
+                className="text-xs font-semibold text-slate-600 hover:text-slate-900 px-4 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 transition"
+              >
+                Tutup Pratinjau
+              </button>
             </div>
           </div>
         </div>

@@ -59,6 +59,7 @@ export default function CreateEventPage() {
   const [newItemPrice, setNewItemPrice] = useState('');
   const [newItemCategory, setNewItemCategory] = useState('Menu Makanan');
   const [newItemDesc, setNewItemDesc] = useState('');
+  const [newItemImage, setNewItemImage] = useState('');
 
   // OCR AI state
   const [isScanning, setIsScanning] = useState(false);
@@ -85,12 +86,14 @@ export default function CreateEventPage() {
       price,
       category: newItemCategory || 'Menu Makanan',
       description: newItemDesc.trim(),
+      imageUrl: newItemImage.trim() || undefined,
     };
 
     setMenuItems((prev) => [...prev, item]);
     setNewItemName('');
     setNewItemPrice('');
     setNewItemDesc('');
+    setNewItemImage('');
   };
 
   const handleRemoveItem = (id: string) => {
@@ -627,12 +630,22 @@ export default function CreateEventPage() {
                 </button>
               </div>
 
-              <div className="sm:col-span-12">
+              <div className="sm:col-span-7">
                 <input
                   type="text"
-                  placeholder="Keterangan / komposisi menu jika ada (opsional, misal: Nasi, Cumi, Sambal Bawang, Telur Mata Sapi)"
+                  placeholder="Keterangan / komposisi menu (opsional, misal: Nasi, Cumi, Sambal Bawang, Telur Mata Sapi)"
                   value={newItemDesc}
                   onChange={(e) => setNewItemDesc(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="sm:col-span-5">
+                <input
+                  type="text"
+                  placeholder="URL Foto menu opsional (misal: /menus/... atau https://...)"
+                  value={newItemImage}
+                  onChange={(e) => setNewItemImage(e.target.value)}
                   className="w-full px-3 py-1.5 rounded-lg border border-slate-300 text-xs bg-white text-slate-900 focus:ring-2 focus:ring-orange-500 placeholder:text-slate-400"
                 />
               </div>
@@ -665,8 +678,15 @@ export default function CreateEventPage() {
                     key={item.id || idx}
                     className="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50 transition text-xs"
                   >
-                    <div className="flex items-start gap-2 overflow-hidden pr-2">
-                      <span className="w-6 text-slate-400 font-mono shrink-0 pt-0.5">{idx + 1}.</span>
+                    <div className="flex items-start gap-2.5 overflow-hidden pr-2">
+                      <span className="w-5 text-slate-400 font-mono shrink-0 pt-0.5">{idx + 1}.</span>
+                      {item.imageUrl && (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-10 h-10 rounded-lg object-cover shrink-0 border border-slate-200 shadow-2xs"
+                        />
+                      )}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-slate-900">{item.name}</span>
