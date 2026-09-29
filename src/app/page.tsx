@@ -21,7 +21,7 @@ import {
   Film,
 } from 'lucide-react';
 import { formatIndonesianDate } from '@/lib/calculator';
-import TutorialVideoSection from '@/components/TutorialVideoSection';
+import TutorialVideoModal from '@/components/TutorialVideoModal';
 
 interface LocalHistoryItem {
   id: string;
@@ -49,6 +49,9 @@ export default function HomePage() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [history, setHistory] = useState<LocalHistoryItem[]>([]);
   const [joinCode, setJoinCode] = useState('');
+
+  // Tutorial modal state
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
 
   // PIN modal state
   const [pinModalEvent, setPinModalEvent] = useState<EventSummary | null>(null);
@@ -170,13 +173,14 @@ export default function HomePage() {
             Buat Acara Baru (Sebagai PIC)
           </Link>
 
-          <a
-            href="#tutorial-section"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-sm shadow-xs transition hover:scale-[1.02]"
+          <button
+            type="button"
+            onClick={() => setShowTutorialModal(true)}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-sm shadow-xs transition hover:scale-[1.02] cursor-pointer"
           >
             <Film className="w-4 h-4 text-orange-600" />
             <span>Tonton Video Tutorial (30 Detik)</span>
-          </a>
+          </button>
 
           <form onSubmit={handleJoin} className="w-full sm:w-auto flex items-center gap-2">
             <input
@@ -196,9 +200,6 @@ export default function HomePage() {
           </form>
         </div>
       </section>
-
-      {/* Video Tutorial Section */}
-      <TutorialVideoSection />
 
       {/* Daftar Acara Aktif dari Server */}
       <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
@@ -374,6 +375,12 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Tutorial Video Modal */}
+      <TutorialVideoModal
+        isOpen={showTutorialModal}
+        onClose={() => setShowTutorialModal(false)}
+      />
 
       {/* Feature Highlights Grid */}
       <section className="space-y-6">
