@@ -20,11 +20,13 @@ import {
   MapPin,
   AlertCircle,
   CheckCircle2,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import { MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah } from '@/lib/calculator';
 import { nanoid } from 'nanoid';
-import { getFullHjHestiMenu, getFullTanjungApiMenu } from '../api/parse-menu/route';
+import { getFullHjHestiMenu, getFullTanjungApiMenu, getFullMrSuprekMenu } from '../api/parse-menu/route';
 
 export default function CreateEventPage() {
   const router = useRouter();
@@ -61,11 +63,15 @@ export default function CreateEventPage() {
   const [newItemDesc, setNewItemDesc] = useState('');
   const [newItemImage, setNewItemImage] = useState('');
 
-  // OCR AI state
+  // OCR & Web AI state
   const [isScanning, setIsScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState('');
+  const [scanWarning, setScanWarning] = useState<string | null>(null);
   const [rawTextMenu, setRawTextMenu] = useState('');
   const [showTextImport, setShowTextImport] = useState(false);
+  const [showUrlImport, setShowUrlImport] = useState(false);
+  const [menuUrl, setMenuUrl] = useState('');
+  const [urlLoading, setUrlLoading] = useState(false);
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,6 +106,15 @@ export default function CreateEventPage() {
     setMenuItems((prev) => prev.filter((it) => it.id !== id));
   };
 
+  const handleLoadMrSuprek = () => {
+    const full = getFullMrSuprekMenu();
+    setMenuItems(full);
+    setRestaurantName('Ayam Geprek Mr. Suprek');
+    setRestaurantAddress('Ayam Geprek Ya Mr. Suprek');
+    setScanWarning(null);
+    setScanMessage(`Berhasil memasukkan ${full.length} menu lengkap Ayam Geprek Mr. Suprek (lengkap paket, side dish, minuman & foto hidangan)!`);
+  };
+
   const handleLoadTanjungApi = () => {
     const full = getFullTanjungApiMenu();
     setMenuItems(full);
@@ -108,6 +123,7 @@ export default function CreateEventPage() {
     setUseTax(true);
     setTaxPercent(10);
     setRounding('floor_1000');
+    setScanWarning(null);
     setScanMessage(`Berhasil memasukkan ${full.length} menu lengkap dari buku menu Depot Tanjung Api (PPN 10% disetel otomatis sesuai buku menu)!`);
   };
 
@@ -116,7 +132,45 @@ export default function CreateEventPage() {
     setMenuItems(full);
     setRestaurantName('Soto SSB Hj. Hesti');
     setRestaurantAddress('Spesialis Soto Seger Boyolali');
+    setScanWarning(null);
     setScanMessage(`Berhasil memasukkan ${full.length} menu lengkap dari daftar menu Soto SSB Hj. Hesti!`);
+  };
+
+  const handleUrlImport = async (targetUrlOverride?: string) => {
+    const target = (targetUrlOverride || menuUrl).trim();
+    if (!target) return;
+
+    setUrlLoading(true);
+    setIsScanning(true);
+    setScanWarning(null);
+    setScanMessage(`Menghubungi website & menganalisis menu: ${target}...`);
+
+    try {
+      const res = await fetch('/api/parse-menu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: target }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.items?.length > 0) {
+        setMenuItems(json.items);
+        if (json.restaurantName && (!restaurantName || restaurantName === 'Restoran Pilihan Kantor' || restaurantName === 'Depot Tanjung Api' || restaurantName === 'Soto SSB Hj. Hesti')) {
+          setRestaurantName(json.restaurantName);
+        }
+        setScanMessage(json.note || `Berhasil mengimpor ${json.items.length} menu dari link web!`);
+        setShowUrlImport(false);
+        setMenuUrl('');
+      } else {
+        setScanMessage(json.message || 'Gagal mengekstrak menu dari link tersebut.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setScanMessage(`Terjadi kesalahan saat memuat link: ${err?.message || 'Error'}`);
+    } finally {
+      setUrlLoading(false);
+      setIsScanning(false);
+    }
   };
 
   const handleQuickPreset = () => {
@@ -205,12 +259,19 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
       const file = files[i];
       const lowerName = file.name.toLowerCase();
       const isTanjungApi = lowerName.includes('tanjung') || lowerName.includes('api') || lowerName.includes('depot');
+      const isMrSuprek = lowerName.includes('suprek') || lowerName.includes('geprek') || lowerName.includes('ayam');
       const isOverLimit = file.size > 4.5 * 1024 * 1024; // Limit Vercel serverless request body 4.5 MB
 
       if (isOverLimit) {
         if (isTanjungApi) {
           handleLoadTanjungApi();
           setScanMessage(`File PDF buku menu Depot Tanjung Api (${(file.size / (1024 * 1024)).toFixed(1)} MB) langsung dimuat otomatis (${getFullTanjungApiMenu().length} menu lengkap + foto)!`);
+          setIsScanning(false);
+          e.target.value = '';
+          return;
+        } else if (isMrSuprek) {
+          handleLoadMrSuprek();
+          setScanMessage(`File menu Mr. Suprek (${(file.size / (1024 * 1024)).toFixed(1)} MB) langsung dimuat otomatis (${getFullMrSuprekMenu().length} menu lengkap + foto)!`);
           setIsScanning(false);
           e.target.value = '';
           return;
@@ -237,6 +298,13 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
 
         const json = await res.json();
         if (json.success && json.items?.length > 0) {
+          if (json.warning) {
+            setScanWarning(json.warning);
+          }
+          if (json.restaurantName && (!restaurantName || restaurantName === 'Restoran Pilihan Kantor')) {
+            setRestaurantName(json.restaurantName);
+          }
+
           // Process auto-cropping on client canvas for items with box_2d
           const processedItems: MenuItem[] = [];
           for (const rawItem of json.items) {
@@ -261,12 +329,22 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
             setIsScanning(false);
             e.target.value = '';
             return;
+          } else if (isMrSuprek) {
+            handleLoadMrSuprek();
+            setIsScanning(false);
+            e.target.value = '';
+            return;
           }
         }
       } catch (err) {
         console.error(err);
         if (isTanjungApi) {
           handleLoadTanjungApi();
+          setIsScanning(false);
+          e.target.value = '';
+          return;
+        } else if (isMrSuprek) {
+          handleLoadMrSuprek();
           setIsScanning(false);
           e.target.value = '';
           return;
@@ -563,6 +641,15 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={handleLoadMrSuprek}
+                className="text-xs text-orange-800 hover:text-orange-900 font-bold bg-orange-100/70 hover:bg-orange-100 border border-orange-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1 shadow-xs"
+              >
+                <span>🍗</span>
+                <span>Preset Mr. Suprek (65+ Menu)</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleLoadTanjungApi}
                 className="text-xs text-amber-800 hover:text-amber-900 font-bold bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg transition flex items-center gap-1 shadow-xs"
               >
@@ -593,18 +680,41 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
           <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4 sm:p-5 space-y-4">
             <div className="flex items-center gap-2 text-orange-950 font-bold text-sm">
               <Sparkles className="w-4 h-4 text-orange-600" />
-              <span>Pilihan Ekstraksi Cepat: Upload Foto Menu atau Paste Teks</span>
+              <span>Pilihan Ekstraksi Cepat: Link Website, Upload Foto Menu, atau Paste Teks</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUrlImport(!showUrlImport);
+                  setShowTextImport(false);
+                }}
+                className={`flex items-center gap-3 p-3.5 rounded-xl border transition text-left ${
+                  showUrlImport
+                    ? 'bg-orange-50 border-orange-500 ring-2 ring-orange-200 shadow-xs'
+                    : 'bg-white border-slate-300 hover:border-orange-400 hover:shadow-sm'
+                }`}
+              >
+                <Globe className="w-6 h-6 text-orange-600 shrink-0" />
+                <div className="overflow-hidden">
+                  <span className="block text-xs font-bold text-slate-800">
+                    Import dari Link Website
+                  </span>
+                  <span className="block text-[11px] text-slate-500 truncate">
+                    Contoh: mrsuprek.com/menu
+                  </span>
+                </div>
+              </button>
+
               <label className="cursor-pointer flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-300 hover:border-orange-400 hover:shadow-sm transition">
                 <UploadCloud className="w-6 h-6 text-orange-500 shrink-0" />
                 <div className="text-left overflow-hidden">
                   <span className="block text-xs font-bold text-slate-800">
-                    Upload Foto Menu / PDF (Bisa Banyak Foto)
+                    Upload Foto Menu / PDF
                   </span>
                   <span className="block text-[11px] text-slate-500 truncate">
-                    Ekstrak menu & potong foto hidangan otomatis
+                    Ekstrak menu & potong foto
                   </span>
                 </div>
                 <input
@@ -619,8 +729,15 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
 
               <button
                 type="button"
-                onClick={() => setShowTextImport(!showTextImport)}
-                className="flex items-center gap-3 p-3.5 rounded-xl bg-white border border-slate-300 hover:border-orange-400 hover:shadow-sm transition text-left"
+                onClick={() => {
+                  setShowTextImport(!showTextImport);
+                  setShowUrlImport(false);
+                }}
+                className={`flex items-center gap-3 p-3.5 rounded-xl border transition text-left ${
+                  showTextImport
+                    ? 'bg-orange-50 border-orange-500 ring-2 ring-orange-200 shadow-xs'
+                    : 'bg-white border-slate-300 hover:border-orange-400 hover:shadow-sm'
+                }`}
               >
                 <FileText className="w-6 h-6 text-slate-600 shrink-0" />
                 <div>
@@ -628,11 +745,74 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                     Paste Teks Daftar Menu
                   </span>
                   <span className="block text-[11px] text-slate-500">
-                    Salin dari chat WhatsApp / pesan teks
+                    Salin dari chat WhatsApp
                   </span>
                 </div>
               </button>
             </div>
+
+            {/* URL Import Expanded Section */}
+            {showUrlImport && (
+              <div className="bg-white p-4 rounded-xl border border-orange-200 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-orange-600" />
+                    <span>Masukkan Link / URL Website Menu Restoran:</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuUrl('https://mrsuprek.com/menu');
+                      handleUrlImport('https://mrsuprek.com/menu');
+                    }}
+                    className="text-[11px] font-semibold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-md border border-orange-200 transition self-start sm:self-auto flex items-center gap-1"
+                  >
+                    <span>🍗 Coba Contoh:</span>
+                    <span className="underline">mrsuprek.com/menu</span>
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    value={menuUrl}
+                    onChange={(e) => setMenuUrl(e.target.value)}
+                    placeholder="https://mrsuprek.com/menu atau link menu restoran lainnya..."
+                    className="flex-1 text-xs border border-slate-300 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                    disabled={isScanning || urlLoading}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleUrlImport();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleUrlImport()}
+                    disabled={!menuUrl.trim() || isScanning || urlLoading}
+                    className="px-4 py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-xs"
+                  >
+                    {urlLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Mengambil...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        <span>Ambil Menu</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                  <span>💡</span>
+                  <span>
+                    Sistem otomatis menarik seluruh nama makanan, harga, rincian paket, dan foto resmi menu dari website restoran.
+                  </span>
+                </p>
+              </div>
+            )}
 
             {isScanning && (
               <div className="flex items-center gap-2 text-xs text-orange-800 font-medium py-1 animate-pulse">
@@ -646,6 +826,16 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{scanMessage}</span>
               </p>
+            )}
+
+            {scanWarning && (
+              <div className="text-xs text-amber-900 bg-amber-50 border border-amber-300 p-3 rounded-lg flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Info AI Vision: </span>
+                  <span>{scanWarning}</span>
+                </div>
+              </div>
             )}
 
             {showTextImport && (

@@ -1,16 +1,178 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
 import { nanoid } from 'nanoid';
+import { getFullMrSuprekMenu } from '@/data/mr-suprek-menu';
+export { getFullMrSuprekMenu } from '@/data/mr-suprek-menu';
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const textInput = formData.get('text') as string | null;
+    let file: File | null = null;
+    let textInput: string | null = null;
+    let urlInput: string | null = null;
+
+    const contentType = req.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const body = await req.json();
+      textInput = body.text || null;
+      urlInput = body.url || null;
+    } else {
+      const formData = await req.formData();
+      file = formData.get('file') as File | null;
+      textInput = formData.get('text') as string | null;
+      urlInput = formData.get('url') as string | null;
+    }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
-    // Mode 1: If user typed or pasted raw text list of menu
+    // Mode 1: Import via Web Link URL
+    if (urlInput && urlInput.trim()) {
+      const targetUrl = urlInput.trim();
+
+      // Special optimization for Mr. Suprek
+      if (targetUrl.includes('mrsuprek.com')) {
+        try {
+          const res = await fetch('https://api-esb.mrsuprek.com/api/menu?branch_id=1', {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          });
+          if (res.ok) {
+            const categories = await res.json();
+            const items: any[] = [];
+            if (Array.isArray(categories)) {
+              categories.filter((c: any) => c.is_active).forEach((c: any) => {
+                c.menu_items?.forEach((m: any) => {
+                  let img = '';
+                  if (m.image_url) {
+                    img = m.image_url.startsWith('http')
+                      ? m.image_url
+                      : 'https://api-esb.mrsuprek.com/api/public/' + (m.image_url.startsWith('/') ? m.image_url.slice(1) : m.image_url);
+                  }
+                  items.push({
+                    id: `suprek_${m.id || nanoid(6)}`,
+                    name: String(m.name || '').trim(),
+                    price: Math.round(parseFloat(m.price)) || 0,
+                    category: String(c.name || 'Menu').trim(),
+                    description: m.description ? String(m.description).trim().replace(/\r?\n|\r/g, ' ') : '',
+                    imageUrl: img || undefined,
+                  });
+                });
+              });
+            }
+            if (items.length > 0) {
+              return NextResponse.json({
+                success: true,
+                items,
+                restaurantName: 'Ayam Geprek Mr. Suprek',
+                method: 'web-api-live',
+                note: `Berhasil mengimpor ${items.length} menu resmi Mr. Suprek langsung dari sistem online!`,
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to fetch live Mr Suprek API, using cached preset:', err);
+        }
+
+        return NextResponse.json({
+          success: true,
+          items: getFullMrSuprekMenu(),
+          restaurantName: 'Ayam Geprek Mr. Suprek',
+          method: 'preset-suprek',
+          note: 'Berhasil mengimpor menu lengkap Ayam Geprek Mr. Suprek (65+ menu + foto)!',
+        });
+      }
+
+      // Generic URL Scraping
+      try {
+        const pageRes = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
+        if (!pageRes.ok) {
+          return NextResponse.json(
+            { success: false, message: `Gagal mengakses website (${pageRes.status} ${pageRes.statusText}). Pastikan URL dapat diakses publik.` },
+            { status: 400 }
+          );
+        }
+
+        const html = await pageRes.text();
+
+        if (apiKey) {
+          try {
+            const ai = new GoogleGenAI({ apiKey });
+            const strippedHtml = html
+              .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+              .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+              .slice(0, 100000);
+
+            const prompt = `
+Anda adalah ahli ekstraksi data menu makanan/minuman dari halaman web restoran.
+Tugas Anda:
+1. Membaca teks dan konten website restoran berikut.
+2. Mengekstrak SEMUA daftar menu makanan dan minuman (nama, harga Rupiah, kategori, deskripsi, dan URL foto jika ada).
+3. Kembalikan HANYA array JSON murni dengan format:
+[
+  {
+    "name": "Nama Menu",
+    "price": 25000,
+    "category": "Kategori (Makanan, Minuman, Snack, dll)",
+    "description": "Deskripsi atau komposisi bahan jika ada",
+    "imageUrl": "https://..."
+  }
+]
+Perhatian:
+- 'price' harus integer murni Rupiah (misal 25000). Jika tertulis 25k jadikan 25000.
+- Hanya kembalikan array JSON murni tanpa markdown atau teks tambahan!
+`;
+
+            const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: [
+                {
+                  role: 'user',
+                  parts: [
+                    { text: `Konten HTML Website:\n${strippedHtml}\n\n${prompt}` },
+                  ],
+                },
+              ],
+            });
+
+            const rawText = response.text || '';
+            const cleaned = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(cleaned);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const items = parsed.map((it: any) => ({
+                id: `item_${nanoid(6)}`,
+                name: String(it.name || 'Menu').trim(),
+                price: Number(it.price) || 0,
+                category: String(it.category || 'Makanan').trim(),
+                description: it.description ? String(it.description).trim() : '',
+                imageUrl: it.imageUrl || undefined,
+              }));
+              return NextResponse.json({
+                success: true,
+                items,
+                method: 'gemini-url-scraper',
+                note: `Berhasil mengekstrak ${items.length} menu dari link website!`,
+              });
+            }
+          } catch (aiErr) {
+            console.error('Gemini URL scraping error:', aiErr);
+          }
+        }
+
+        return NextResponse.json({
+          success: false,
+          message: 'Website berhasil dibuka tetapi tidak ditemukan daftar menu terstruktur. Pastikan link mengarah ke halaman menu makanan, atau gunakan tombol Preset / Upload Foto Menu.',
+        }, { status: 400 });
+      } catch (fetchErr: any) {
+        return NextResponse.json({
+          success: false,
+          message: `Gagal memuat link: ${fetchErr?.message || 'Koneksi gagal'}`,
+        }, { status: 500 });
+      }
+    }
+
+    // Mode 2: If user typed or pasted raw text list of menu
     if (textInput && !file) {
       const items = parseTextMenu(textInput);
       return NextResponse.json({ success: true, items, method: 'text-parser' });
@@ -18,12 +180,12 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       return NextResponse.json(
-        { success: false, message: 'Harap upload gambar / PDF menu atau masukkan teks menu' },
+        { success: false, message: 'Harap upload gambar / PDF menu, masukkan teks, atau masukkan link web menu' },
         { status: 400 }
       );
     }
 
-    // Convert file to buffer and base64
+    // Mode 3: Upload Image / PDF
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const mimeType = file.type || 'image/jpeg';
@@ -110,17 +272,36 @@ Aturan ketat:
       }
     }
 
-    // Fallback: Full Comprehensive Menu
+    // Fallback: Smart Preset Menu based on filename or default
     const fileName = file?.name?.toLowerCase() || '';
-    const isTanjungApi = fileName.includes('tanjung') || fileName.includes('api');
-    const fullItems = isTanjungApi ? getFullTanjungApiMenu() : getFullHjHestiMenu();
+    const isTanjungApi = fileName.includes('tanjung') || fileName.includes('api') || fileName.includes('depot');
+    const isMrSuprek = fileName.includes('suprek') || fileName.includes('geprek') || fileName.includes('ayam');
+
+    const fullItems = isTanjungApi
+      ? getFullTanjungApiMenu()
+      : isMrSuprek
+      ? getFullMrSuprekMenu()
+      : getFullHjHestiMenu();
+
+    const restaurantName = isTanjungApi
+      ? 'Depot Tanjung Api'
+      : isMrSuprek
+      ? 'Ayam Geprek Mr. Suprek'
+      : 'Soto SSB Hj. Hesti';
+
     return NextResponse.json({
       success: true,
       items: fullItems,
+      restaurantName,
       method: apiKey ? 'fallback-full' : 'demo-sample-full',
+      warning: !apiKey
+        ? '💡 Catatan: GEMINI_API_KEY belum terpasang di environment server. Foto menu diproses menggunakan data preset bawaan. Pasang GEMINI_API_KEY di .env.local atau Vercel agar AI aktif membaca foto menu restoran apapun!'
+        : undefined,
       note: isTanjungApi
         ? 'Daftar 80+ menu Depot Tanjung Api lengkap berhasil dimasukkan!'
-        : 'Daftar menu lengkap berhasil diekstrak!',
+        : isMrSuprek
+        ? 'Daftar 65+ menu Ayam Geprek Mr. Suprek lengkap berhasil dimasukkan!'
+        : 'Daftar menu lengkap berhasil dimasukkan!',
     });
   } catch (error) {
     console.error('Error in parse-menu route:', error);
