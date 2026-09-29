@@ -18,8 +18,10 @@ import {
   CheckCircle2,
   Store,
   X,
+  Film,
 } from 'lucide-react';
 import { formatIndonesianDate } from '@/lib/calculator';
+import TutorialVideoSection from '@/components/TutorialVideoSection';
 
 interface LocalHistoryItem {
   id: string;
@@ -168,24 +170,35 @@ export default function HomePage() {
             Buat Acara Baru (Sebagai PIC)
           </Link>
 
+          <a
+            href="#tutorial-section"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-sm shadow-xs transition hover:scale-[1.02]"
+          >
+            <Film className="w-4 h-4 text-orange-600" />
+            <span>Tonton Video Tutorial (30 Detik)</span>
+          </a>
+
           <form onSubmit={handleJoin} className="w-full sm:w-auto flex items-center gap-2">
             <input
               type="text"
-              placeholder="Masukkan ID / Kode Acara..."
+              placeholder="Masukkan ID Acara..."
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value)}
-              className="w-full sm:w-64 px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+              className="w-full sm:w-52 px-4 py-3 rounded-xl border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
             />
             <button
               type="submit"
               disabled={!joinCode.trim()}
-              className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-sm font-medium transition"
+              className="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white text-sm font-medium transition shrink-0"
             >
               Buka
             </button>
           </form>
         </div>
       </section>
+
+      {/* Video Tutorial Section */}
+      <TutorialVideoSection />
 
       {/* Daftar Acara Aktif dari Server */}
       <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
