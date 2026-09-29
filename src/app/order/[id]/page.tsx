@@ -659,13 +659,13 @@ export default function OrderPage() {
                   </div>
                 )}
 
-                {/* Scrollable pills container */}
+                {/* Scrollable pills container with neat grid & truncate for long names */}
                 {filteredOrders.length === 0 ? (
                   <p className="text-[11px] text-slate-500 py-3 text-center bg-white rounded-lg border border-dashed border-slate-200">
                     Nama &quot;<strong>{orderSearchQuery}</strong>&quot; tidak ditemukan.
                   </p>
                 ) : (
-                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-1 min-[360px]:grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-44 overflow-y-auto pr-1">
                     {filteredOrders.map((ord) => {
                       const isCurrentActive =
                         existingOrder?.id === ord.id ||
@@ -681,16 +681,19 @@ export default function OrderPage() {
                         <button
                           key={ord.id}
                           type="button"
+                          title={`${ord.userName} • ${formatRupiah(ordCalc.totalAmount)} (Klik untuk lihat/ubah)`}
                           onClick={() => setPreviewOrder(ord)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 border cursor-pointer ${
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between gap-1.5 border text-left cursor-pointer min-w-0 ${
                             isCurrentActive
                               ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : 'bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
+                              : 'bg-white hover:bg-blue-50 text-slate-800 hover:text-blue-700 border-slate-200 hover:border-blue-300'
                           }`}
                         >
-                          <span>{ord.userName}</span>
+                          <span className="truncate font-semibold min-w-0 flex-1">
+                            {ord.userName}
+                          </span>
                           <span
-                            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                            className={`shrink-0 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md ${
                               isCurrentActive
                                 ? 'bg-blue-700 text-blue-100'
                                 : 'bg-slate-100 text-slate-600'
