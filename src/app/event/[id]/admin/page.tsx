@@ -1158,16 +1158,9 @@ export default function EventAdminPage() {
             <CreditCard className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-xl sm:text-2xl font-extrabold text-slate-900 truncate">{formatRupiah(totalRestoBill)}</p>
-          <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span>{event.taxConfig.useTax ? `+ PPN ${event.taxConfig.taxPercent}%` : 'Tanpa PPN'}</span>
-            <button
-              type="button"
-              onClick={handleOpenTaxModal}
-              className="text-orange-600 font-bold hover:underline"
-            >
-              Ubah
-            </button>
-          </div>
+          <p className="text-[11px] text-slate-500">
+            {event.taxConfig.useTax ? `+ PPN ${event.taxConfig.taxPercent}%` : 'Tanpa PPN'}
+          </p>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1">
@@ -1176,18 +1169,9 @@ export default function EventAdminPage() {
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <p className="text-xl sm:text-2xl font-extrabold text-emerald-600 truncate">{formatRupiah(totalCollectedBills)}</p>
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-emerald-700 font-medium truncate">
-              Terkumpul: {formatRupiah(totalPaidAmount)}
-            </span>
-            <button
-              type="button"
-              onClick={handleOpenTaxModal}
-              className="text-orange-600 font-bold hover:underline shrink-0 ml-1"
-            >
-              Setting
-            </button>
-          </div>
+          <p className="text-[11px] text-emerald-700 font-medium">
+            Terkumpul: {formatRupiah(totalPaidAmount)}
+          </p>
         </div>
       </div>
 
