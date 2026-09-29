@@ -189,7 +189,7 @@ Perhatian:
 - Hanya kembalikan array JSON murni tanpa markdown atau teks tambahan!
 `;
 
-          const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
+          const candidateModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
           for (const model of candidateModels) {
             try {
               const ai = new GoogleGenAI({ apiKey });
@@ -260,7 +260,7 @@ Perhatian:
     const mimeType = file.type || 'image/jpeg';
 
     if (apiKey) {
-      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview'];
+      const candidateModels = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3-flash-preview', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
       const errorsList: string[] = [];
 
       for (const model of candidateModels) {
