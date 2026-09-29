@@ -916,234 +916,216 @@ export default function EventAdminPage() {
           </button>
         </div>
 
-        {/* Share & Export Action Bar (Neatly Grouped & Aligned) */}
-        <div className="pt-4 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-2 gap-3.5">
-          {/* Kelompok 1: Bagikan Acara */}
-          <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100/90 flex flex-col justify-between gap-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-emerald-950 flex items-center gap-1.5">
-                <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Bagikan ke Rekan Kantor</span>
-              </span>
-              <span className="text-[10px] text-emerald-700 font-medium hidden sm:inline">
-                Link & WhatsApp
-              </span>
-            </div>
+        {/* Share & Export Action Bar (Ultra-Compact & Sleek) */}
+        <div className="pt-3 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-2">
+          {/* Kelompok 1: Bagikan Link & WhatsApp (1 Baris Rapi) */}
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={copyPublicLink}
+              title="Salin Link Acara untuk Pemesan"
+              className="py-2 px-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
+              <span className="truncate">{copiedLink ? 'Tersalin!' : 'Salin Link'}</span>
+            </button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={copyPublicLink}
-                className="w-full py-2.5 px-2.5 rounded-xl bg-white hover:bg-emerald-50/70 border border-emerald-200/90 text-slate-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-2xs hover:border-emerald-300 cursor-pointer"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
-                <span className="truncate">{copiedLink ? 'Link Tersalin!' : 'Salin Public Link'}</span>
-              </button>
+            <button
+              type="button"
+              onClick={copyWhatsAppText}
+              title="Salin Teks Format WhatsApp"
+              className="py-2 px-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
+            >
+              {copiedWA ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+              <span className="truncate">{copiedWA ? 'Tersalin!' : 'Salin WA'}</span>
+            </button>
 
-              <button
-                type="button"
-                onClick={copyWhatsAppText}
-                className="w-full py-2.5 px-2.5 rounded-xl bg-white hover:bg-emerald-50/70 border border-emerald-200/90 text-emerald-800 text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-2xs hover:border-emerald-300 cursor-pointer"
-              >
-                {copiedWA ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <MessageCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                <span className="truncate">{copiedWA ? 'Teks Tersalin!' : 'Salin Teks WA'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={openWhatsApp}
-                className="w-full py-2.5 px-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm shadow-emerald-600/20 cursor-pointer"
-              >
-                <Share2 className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Kirim ke WA</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={openWhatsApp}
+              title="Buka WhatsApp Langsung"
+              className="py-2 px-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+            >
+              <Share2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Kirim WA</span>
+            </button>
           </div>
 
-          {/* Kelompok 2: Unduh Laporan & Cetak */}
-          <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col justify-between gap-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-bold text-slate-900 flex items-center gap-1.5">
-                <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span>Unduh Laporan & Rekap</span>
-              </span>
-              <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">
-                Excel, PDF & Print
-              </span>
-            </div>
+          {/* Kelompok 2: Unduh Laporan & Cetak (1 Baris Rapi) */}
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() => exportToExcel(event, orders)}
+              disabled={orders.length === 0}
+              title="Download Data Excel (.xlsx)"
+              className="py-2 px-1.5 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Excel</span>
+            </button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* PDF Export Dropdown */}
+            <div className="relative w-full">
               <button
                 type="button"
-                onClick={() => exportToExcel(event, orders)}
+                onClick={() => setIsPdfDropdownOpen((prev) => !prev)}
                 disabled={orders.length === 0}
-                className="w-full py-2.5 px-2.5 rounded-xl bg-green-700 hover:bg-green-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                title="Pilih Format Unduh PDF"
+                className="w-full py-2 px-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1 transition shadow-xs cursor-pointer"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Download Excel</span>
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">PDF</span>
+                <ChevronDown className="w-3 h-3 text-rose-200 shrink-0" />
               </button>
 
-              {/* PDF Export Dropdown */}
-              <div className="relative w-full">
-                <button
-                  type="button"
-                  onClick={() => setIsPdfDropdownOpen((prev) => !prev)}
-                  disabled={orders.length === 0}
-                  className="w-full py-2.5 px-2.5 rounded-xl bg-rose-700 hover:bg-rose-800 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1 transition shadow-xs cursor-pointer"
-                >
-                  <FileText className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">Download PDF</span>
-                  <ChevronDown className="w-3 h-3 text-rose-200 shrink-0" />
-                </button>
-
-                {isPdfDropdownOpen && orders.length > 0 && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-20"
-                      onClick={() => setIsPdfDropdownOpen(false)}
-                    />
-                    <div className="absolute right-0 sm:left-1/2 sm:-translate-x-1/2 mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
-                      <div className="px-3 py-1.5 border-b border-slate-100">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
-                      </div>
-
-                      {/* Opsi 1: Format Slip Checklist Resto (Kisi Bergaris 1/2 A4, Tanpa No Meja) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          exportToSlipOrderHalfA4Pdf(event, orders);
-                          setIsPdfDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-600 group-hover:text-white transition">
-                          <ClipboardCheck className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <span>Slip Checklist Resto</span>
-                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-bold rounded">Form 1/2 A4</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                            Format nota fisik restoran bergaris kotak 2 kolom pas 1/2 A4, tanpa nomor meja.
-                          </div>
-                        </div>
-                      </button>
-
-                      <div className="h-px bg-slate-100 my-1" />
-
-                      {/* Opsi 1b: Distribusi Pesanan per Orang (Siapa Pesan Apa, 1/2 A4) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          exportToPersonOrderHalfA4Pdf(event, orders);
-                          setIsPdfDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-violet-600 group-hover:text-white transition">
-                          <UserCheck className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <span>Distribusi per Orang</span>
-                            <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 text-[9px] font-bold rounded">Siapa Pesan Apa</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                            Format 1/2 A4 berisi daftar nama karyawan & pesanannya untuk pembagian makanan.
-                          </div>
-                        </div>
-                      </button>
-
-                      <div className="h-px bg-slate-100 my-1" />
-
-                      {/* Opsi 2: Rekap 1/2 A4 Landscape (Kanan - Kiri, Pas 1 Lembar) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          exportToLandscapeHalfA4Pdf(event, orders);
-                          setIsPdfDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-sky-600 group-hover:text-white transition">
-                          <Columns2 className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <span>Rekap Sejajar (Kanan - Kiri)</span>
-                            <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">1/2 A4</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                            Format landscape 2 kolom sejajar, pas untuk 1 lembar setengah kertas A4.
-                          </div>
-                        </div>
-                      </button>
-
-                      <div className="h-px bg-slate-100 my-1" />
-
-                      {/* Opsi 2: Rekap Pesanan per Kategori Menu (A4 Vertikal) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          exportToCategoryPdf(event, orders);
-                          setIsPdfDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-emerald-600 group-hover:text-white transition">
-                          <ChefHat className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <span>Rekap per Kategori (A4 Vertikal)</span>
-                            <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Porsi & Catatan</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                            Daftar berurutan ke bawah per kategori menu, bersih tanpa harga.
-                          </div>
-                        </div>
-                      </button>
-
-                      <div className="h-px bg-slate-100 my-1" />
-
-                      {/* Opsi 3: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          exportToPdf(event, orders);
-                          setIsPdfDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
-                      >
-                        <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-rose-600 group-hover:text-white transition">
-                          <FileText className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <span>Rekap Lengkap (Split Bill)</span>
-                            <span className="px-1.5 py-0.2 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">Versi Lama</span>
-                          </div>
-                          <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                            Tabel resto lengkap dengan rincian harga, PPN, dan rincian tagihan split bill per karyawan.
-                          </div>
-                        </div>
-                      </button>
+              {isPdfDropdownOpen && orders.length > 0 && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setIsPdfDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 sm:left-1/2 sm:-translate-x-1/2 mt-1.5 w-72 rounded-xl bg-white border border-slate-200 shadow-xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="px-3 py-1.5 border-b border-slate-100">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Pilih Format Dokumen PDF</span>
                     </div>
-                  </>
-                )}
-              </div>
 
-              <button
-                type="button"
-                onClick={() => window.print()}
-                disabled={orders.length === 0}
-                className="w-full py-2.5 px-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Cetak / Print</span>
-              </button>
+                    {/* Opsi 1: Format Slip Checklist Resto (Kisi Bergaris 1/2 A4, Tanpa No Meja) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToSlipOrderHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-amber-600 group-hover:text-white transition">
+                        <ClipboardCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Slip Checklist Resto</span>
+                          <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-bold rounded">Form 1/2 A4</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Format nota fisik restoran bergaris kotak 2 kolom pas 1/2 A4, tanpa nomor meja.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 1b: Distribusi Pesanan per Orang (Siapa Pesan Apa, 1/2 A4) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToPersonOrderHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-violet-600 group-hover:text-white transition">
+                        <UserCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Distribusi per Orang</span>
+                          <span className="px-1.5 py-0.2 bg-violet-100 text-violet-800 text-[9px] font-bold rounded">Siapa Pesan Apa</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Format 1/2 A4 berisi daftar nama karyawan & pesanannya untuk pembagian makanan.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 2: Rekap 1/2 A4 Landscape (Kanan - Kiri, Pas 1 Lembar) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToLandscapeHalfA4Pdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-sky-600 group-hover:text-white transition">
+                        <Columns2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Rekap Sejajar (Kanan - Kiri)</span>
+                          <span className="px-1.5 py-0.2 bg-sky-100 text-sky-700 text-[9px] font-bold rounded">1/2 A4</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Format landscape 2 kolom sejajar, pas untuk 1 lembar setengah kertas A4.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 2: Rekap Pesanan per Kategori Menu (A4 Vertikal) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToCategoryPdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-emerald-600 group-hover:text-white transition">
+                        <ChefHat className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Rekap per Kategori (A4 Vertikal)</span>
+                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Porsi & Catatan</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Daftar berurutan ke bawah per kategori menu, bersih tanpa harga.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
+                    {/* Opsi 3: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportToPdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-rose-600 group-hover:text-white transition">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <span>Rekap Lengkap (Split Bill)</span>
+                          <span className="px-1.5 py-0.2 bg-rose-100 text-rose-700 text-[9px] font-bold rounded">Versi Lama</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Tabel resto lengkap dengan rincian harga, PPN, dan rincian tagihan split bill per karyawan.
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={orders.length === 0}
+              title="Cetak Nota / Rekap"
+              className="py-2 px-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 disabled:opacity-40 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Cetak</span>
+            </button>
           </div>
         </div>
       </div>
