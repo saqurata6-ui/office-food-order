@@ -29,6 +29,8 @@ import {
   Eye,
   FileText,
   ZoomIn,
+  Users,
+  Search,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
@@ -56,6 +58,10 @@ export default function OrderPage() {
   const [showTaxEstimate, setShowTaxEstimate] = useState(false);
   const [lastSavedInfo, setLastSavedInfo] = useState<{ userName: string; totalAmount: number } | null>(null);
   const [zoomImage, setZoomImage] = useState<{ url: string; title: string } | null>(null);
+
+  // Participant order pills collapsible & search state
+  const [isOrderListExpanded, setIsOrderListExpanded] = useState(false);
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
 
   const [availableEvents, setAvailableEvents] = useState<any[]>([]);
 
@@ -122,6 +128,13 @@ export default function OrderPage() {
     if (!clean || existingOrder) return null;
     return orders.find((o) => normalizeName(o.userName) === clean) || null;
   }, [userName, existingOrder, orders]);
+
+  // Filter orders by search query for participant selection
+  const filteredOrders = useMemo(() => {
+    if (!orderSearchQuery.trim()) return orders;
+    const q = normalizeName(orderSearchQuery);
+    return orders.filter((o) => normalizeName(o.userName).includes(q));
+  }, [orders, orderSearchQuery]);
 
   // Handler to start editing an existing order
   const handleStartEdit = (user: UserOrder) => {
@@ -583,55 +596,115 @@ export default function OrderPage() {
           </div>
         )}
 
-        {/* Quick select previous order pills */}
+        {/* Quick select previous order pills (Compact & Collapsible) */}
         {orders.length > 0 && (
           <div className="pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Eye className="w-3.5 h-3.5 text-blue-600" />
-              <span className="text-[11px] font-bold text-slate-700">
-                {event.isLocked
-                  ? 'Daftar pesanan (klik nama untuk lihat rincian menu):'
-                  : 'Sudah pernah pesan? Klik nama untuk lihat & ubah menu:'}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-              {orders.map((ord) => {
-                const isCurrentActive =
-                  existingOrder?.id === ord.id ||
-                  ord.userName.trim().toLowerCase() === userName.trim().toLowerCase();
-                
-                // Hitung total untuk chip sesuai status centangan PPN
-                const chipTaxConfig: TaxConfig = {
-                  ...event.taxConfig,
-                  useTax: event.taxConfig.useTax && showTaxEstimate,
-                };
-                const ordCalc = calculateOrder(ord.items, chipTaxConfig);
+            <button
+              type="button"
+              onClick={() => setIsOrderListExpanded(!isOrderListExpanded)}
+              className="w-full flex items-center justify-between text-xs py-2 px-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/80 transition group text-left cursor-pointer"
+            >
+              <div className="flex items-center gap-2 font-medium min-w-0">
+                <Users className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span className="font-bold text-slate-800 shrink-0">
+                  {orders.length} orang sudah pesan
+                </span>
+                <span className="hidden sm:inline text-[11px] text-slate-500 truncate">
+                  • {event.isLocked ? 'Klik nama untuk lihat rincian' : 'Klik nama untuk ubah'}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] font-bold text-blue-600 bg-blue-50/80 group-hover:bg-blue-100/80 px-2 py-0.5 rounded-lg shrink-0 transition">
+                <span>{isOrderListExpanded ? 'Tutup' : 'Lihat / Pilih Nama'}</span>
+                {isOrderListExpanded ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+              </div>
+            </button>
 
-                return (
-                  <button
-                    key={ord.id}
-                    type="button"
-                    onClick={() => setPreviewOrder(ord)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 border ${
-                      isCurrentActive
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                        : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
-                    }`}
-                  >
-                    <span>{ord.userName}</span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                        isCurrentActive
-                          ? 'bg-blue-700 text-blue-100'
-                          : 'bg-slate-200/80 text-slate-600'
-                      }`}
-                    >
-                      {formatRupiah(ordCalc.totalAmount)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Expanded List with instant search & scroll container */}
+            {isOrderListExpanded && (
+              <div className="mt-2.5 p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-2 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                    <Eye className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{event.isLocked ? 'Daftar Pesanan Rekan Kantor:' : 'Pilih Nama Pemesan:'}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {filteredOrders.length} dari {orders.length} nama
+                  </span>
+                </div>
+
+                {/* Instant search input when there are 5 or more orders */}
+                {orders.length >= 5 && (
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder={`Cari dari ${orders.length} nama...`}
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {orderSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setOrderSearchQuery('')}
+                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Scrollable pills container */}
+                {filteredOrders.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 py-3 text-center bg-white rounded-lg border border-dashed border-slate-200">
+                    Nama &quot;<strong>{orderSearchQuery}</strong>&quot; tidak ditemukan.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                    {filteredOrders.map((ord) => {
+                      const isCurrentActive =
+                        existingOrder?.id === ord.id ||
+                        ord.userName.trim().toLowerCase() === userName.trim().toLowerCase();
+
+                      const chipTaxConfig: TaxConfig = {
+                        ...event.taxConfig,
+                        useTax: event.taxConfig.useTax && showTaxEstimate,
+                      };
+                      const ordCalc = calculateOrder(ord.items, chipTaxConfig);
+
+                      return (
+                        <button
+                          key={ord.id}
+                          type="button"
+                          onClick={() => setPreviewOrder(ord)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1 border cursor-pointer ${
+                            isCurrentActive
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 border-slate-200'
+                          }`}
+                        >
+                          <span>{ord.userName}</span>
+                          <span
+                            className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                              isCurrentActive
+                                ? 'bg-blue-700 text-blue-100'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {formatRupiah(ordCalc.totalAmount)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
