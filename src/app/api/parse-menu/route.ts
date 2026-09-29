@@ -5,27 +5,38 @@ import { getFullMrSuprekMenu } from '@/data/mr-suprek-menu';
 export { getFullMrSuprekMenu } from '@/data/mr-suprek-menu';
 
 export async function GET() {
-  const hasGeminiKey = !!process.env.GEMINI_API_KEY;
-  const hasGoogleKey = !!process.env.GOOGLE_API_KEY;
-  const hasGenaiKey = !!process.env.GOOGLE_GENAI_API_KEY;
-  const hasPublicGeminiKey = !!process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-  const hasKey = hasGeminiKey || hasGoogleKey || hasGenaiKey || hasPublicGeminiKey;
+  const apiKey = (
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+    process.env.GEMINI_KEY ||
+    ''
+  ).trim();
 
-  const keySource = hasGeminiKey
-    ? 'GEMINI_API_KEY'
-    : hasGoogleKey
-    ? 'GOOGLE_API_KEY'
-    : hasGenaiKey
-    ? 'GOOGLE_GENAI_API_KEY'
-    : hasPublicGeminiKey
-    ? 'NEXT_PUBLIC_GEMINI_API_KEY'
-    : 'none';
+  let availableModels: string[] = [];
+  let listError: string | null = null;
+
+  if (apiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const pager = await ai.models.list();
+      for await (const m of pager) {
+        if (m.name && m.name.includes('gemini')) {
+          availableModels.push(m.name.replace('models/', ''));
+        }
+      }
+    } catch (err: any) {
+      listError = err?.message || String(err);
+    }
+  }
 
   return NextResponse.json({
     status: 'ok',
-    hasApiKey: hasKey,
-    keySource,
-    supportedModels: ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'],
+    hasApiKey: !!apiKey,
+    keyPreview: apiKey ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)}` : null,
+    availableModels: availableModels.slice(0, 15),
+    listError,
   });
 }
 
@@ -178,7 +189,7 @@ Perhatian:
 - Hanya kembalikan array JSON murni tanpa markdown atau teks tambahan!
 `;
 
-          const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+          const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
           for (const model of candidateModels) {
             try {
               const ai = new GoogleGenAI({ apiKey });
@@ -249,8 +260,8 @@ Perhatian:
     const mimeType = file.type || 'image/jpeg';
 
     if (apiKey) {
-      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-      let lastAiError = '';
+      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview'];
+      const errorsList: string[] = [];
 
       for (const model of candidateModels) {
         try {
@@ -327,16 +338,17 @@ Aturan ketat:
             }
           }
         } catch (err: any) {
-          lastAiError = err?.message || String(err);
-          console.warn(`Gemini vision with model ${model} failed:`, lastAiError);
+          const errMsg = err?.message || String(err);
+          errorsList.push(`${model}: ${errMsg}`);
+          console.warn(`Gemini vision with model ${model} failed:`, errMsg);
         }
       }
 
       // If apiKey was provided but all models failed, do NOT return Soto silently!
       return NextResponse.json({
         success: false,
-        error: lastAiError,
-        message: `AI Gemini gagal membaca foto (${lastAiError}). Silakan gunakan tombol Preset (Mr. Suprek / Tanjung Api) atau coba foto yang lebih tajam.`,
+        error: errorsList.join(' | '),
+        message: `AI Gemini gagal membaca foto (${errorsList[0] || 'Gagal memproses'}). Jika foto diambil dari kejauhan atau tulisan kecil/buram, silakan coba foto lebih dekat per kategori menu, atau gunakan Paste Teks / Tombol Preset.`,
       }, { status: 400 });
     }
 
