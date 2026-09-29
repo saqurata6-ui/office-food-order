@@ -334,9 +334,11 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
             setIsScanning(false);
             e.target.value = '';
             return;
+          } else {
+            setScanWarning(json.message || 'Gagal memproses menu dari foto.');
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
         if (isTanjungApi) {
           handleLoadTanjungApi();
@@ -348,6 +350,8 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
           setIsScanning(false);
           e.target.value = '';
           return;
+        } else {
+          setScanWarning(err?.message || 'Terjadi kesalahan saat mengunggah foto.');
         }
       }
     }
@@ -360,7 +364,10 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
           : `Berhasil mengekstrak ${extractedTotal.length} menu lengkap dari foto/dokumen!`
       );
     } else {
-      setScanMessage('Tidak ada menu yang terdeteksi, silakan coba foto yang lebih jelas.');
+      // Don't overwrite scanWarning if it's already set
+      if (!scanWarning) {
+        setScanMessage('Tidak ada menu yang terdeteksi, silakan coba foto yang lebih jelas.');
+      }
     }
 
     setIsScanning(false);
@@ -821,19 +828,19 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
               </div>
             )}
 
-            {scanMessage && !isScanning && (
+            {scanMessage && !isScanning && !scanWarning && (
               <p className="text-xs text-emerald-800 font-medium bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>{scanMessage}</span>
               </p>
             )}
 
-            {scanWarning && (
-              <div className="text-xs text-amber-900 bg-amber-50 border border-amber-300 p-3 rounded-lg flex items-start gap-2">
+            {scanWarning && !isScanning && (
+              <div className="text-xs text-amber-900 bg-amber-50 border border-amber-300 p-3.5 rounded-xl flex items-start gap-2.5 shadow-xs">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-bold">Info AI Vision: </span>
-                  <span>{scanWarning}</span>
+                <div className="space-y-1">
+                  <span className="font-bold block text-amber-950">Pemberitahuan Sistem Menu:</span>
+                  <p className="leading-relaxed">{scanWarning}</p>
                 </div>
               </div>
             )}
