@@ -484,5 +484,30 @@ export const db = {
     saveDb(cache);
 
     return true;
+  },
+
+  async deleteEvent(eventId: string): Promise<boolean> {
+    const cleanEventId = eventId.trim().toLowerCase();
+
+    if (supabase) {
+      try {
+        await supabase.from('orders').delete().eq('event_id', cleanEventId);
+        const { error } = await supabase.from('events').delete().eq('id', cleanEventId);
+        if (error) {
+          console.error('Supabase deleteEvent error:', error);
+        }
+      } catch (sbErr) {
+        console.error('Supabase deleteEvent exception:', sbErr);
+      }
+    }
+
+    const cache = getCache();
+    delete cache.events[cleanEventId];
+    delete cache.events[eventId];
+    delete cache.orders[cleanEventId];
+    delete cache.orders[eventId];
+    saveDb(cache);
+
+    return true;
   }
 };

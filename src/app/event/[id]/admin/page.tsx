@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Lock,
@@ -61,6 +61,7 @@ import { nanoid } from 'nanoid';
 export default function EventAdminPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const eventId = params.id as string;
   const initialPin = searchParams.get('pin') || '';
 
@@ -68,6 +69,7 @@ export default function EventAdminPage() {
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deletingEvent, setDeletingEvent] = useState(false);
 
   // PIN authentication state
   const [adminPin, setAdminPin] = useState(initialPin);
@@ -422,6 +424,48 @@ export default function EventAdminPage() {
       alert('Terjadi kesalahan koneksi saat menyimpan pengaturan pajak.');
     } finally {
       setIsSavingTax(false);
+    }
+  };
+
+  // Delete entire event
+  const handleDeleteEvent = async () => {
+    if (!event) return;
+    const confirmDelete = window.confirm(
+      `Yakin ingin menghapus acara "${event.title}" secara permanen?\nSeluruh daftar pesanan rekan kantor juga akan dihapus.`
+    );
+    if (!confirmDelete) return;
+
+    setDeletingEvent(true);
+    try {
+      const pinToSend = event.adminPin || adminPin;
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(event.id)}?pin=${encodeURIComponent(pinToSend)}`,
+        { method: 'DELETE' }
+      );
+      const json = await res.json();
+      if (json.success) {
+        try {
+          const stored = localStorage.getItem('makan_kantor_history');
+          if (stored) {
+            const list = JSON.parse(stored);
+            const filtered = list.filter((item: any) => item.id !== event.id);
+            localStorage.setItem('makan_kantor_history', JSON.stringify(filtered));
+          }
+          localStorage.removeItem(`makan_kantor_event_${event.id}`);
+          localStorage.removeItem(`makan_kantor_orders_${event.id}`);
+          localStorage.removeItem(`makan_kantor_order_${event.id}`);
+        } catch (e) {}
+
+        alert('Acara berhasil dihapus!');
+        router.push('/');
+      } else {
+        alert(json.message || 'Gagal menghapus acara.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi saat menghapus acara.');
+    } finally {
+      setDeletingEvent(false);
     }
   };
 
@@ -2053,6 +2097,28 @@ export default function EventAdminPage() {
           </div>
         </div>
       )}
+
+      {/* Danger Zone: Hapus Acara */}
+      <div className="p-4 rounded-2xl bg-red-50/70 border border-red-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h4 className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+            <Trash2 className="w-4 h-4 text-red-600" />
+            <span>Zona Pengelolaan: Hapus Acara Ini</span>
+          </h4>
+          <p className="text-[11px] text-red-700 mt-0.5">
+            Hapus acara ini beserta seluruh data pesanan secara permanen jika acara makan sudah selesai atau dibatalkan.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDeleteEvent}
+          disabled={deletingEvent}
+          className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>{deletingEvent ? 'Menghapus...' : 'Hapus Acara'}</span>
+        </button>
+      </div>
 
       {/* MODAL: PENCATATAN PEMBAYARAN (CASH / TF / KEMBALIAN) */}
       {paymentModalOrder && (

@@ -19,6 +19,7 @@ import {
   Store,
   X,
   Film,
+  Trash2,
 } from 'lucide-react';
 import { formatIndonesianDate } from '@/lib/calculator';
 import TutorialVideoModal from '@/components/TutorialVideoModal';
@@ -58,6 +59,7 @@ export default function HomePage() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [verifyingPin, setVerifyingPin] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState(false);
 
   const fetchEvents = async () => {
     try {
@@ -145,6 +147,49 @@ export default function HomePage() {
       setPinError('Terjadi kesalahan koneksi.');
     } finally {
       setVerifyingPin(false);
+    }
+  };
+
+  const handleDeleteFromHome = async () => {
+    if (!pinModalEvent || !pinInput.trim()) return;
+    const confirmDelete = window.confirm(
+      `Yakin ingin menghapus acara "${pinModalEvent.title}" secara permanen?\nSeluruh data pesanan juga akan terhapus.`
+    );
+    if (!confirmDelete) return;
+
+    setDeletingEvent(true);
+    setPinError('');
+    try {
+      const res = await fetch(
+        `/api/events/${encodeURIComponent(pinModalEvent.id)}?pin=${encodeURIComponent(pinInput.trim())}`,
+        { method: 'DELETE' }
+      );
+      const json = await res.json();
+      if (json.success) {
+        try {
+          const stored = localStorage.getItem('makan_kantor_history');
+          if (stored) {
+            const list = JSON.parse(stored);
+            const filtered = list.filter((item: any) => item.id !== pinModalEvent.id);
+            localStorage.setItem('makan_kantor_history', JSON.stringify(filtered));
+          }
+          localStorage.removeItem(`makan_kantor_event_${pinModalEvent.id}`);
+          localStorage.removeItem(`makan_kantor_orders_${pinModalEvent.id}`);
+          localStorage.removeItem(`makan_kantor_order_${pinModalEvent.id}`);
+        } catch (e) {}
+
+        alert('Acara berhasil dihapus!');
+        setPinModalEvent(null);
+        setPinInput('');
+        fetchEvents();
+      } else {
+        setPinError(json.message || 'Gagal menghapus acara. Pastikan PIN benar.');
+      }
+    } catch (err) {
+      console.error(err);
+      setPinError('Terjadi kesalahan koneksi saat menghapus acara.');
+    } finally {
+      setDeletingEvent(false);
     }
   };
 
@@ -365,10 +410,24 @@ export default function HomePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!pinInput.trim() || verifyingPin}
-                  className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shadow-orange-600/20"
+                  disabled={!pinInput.trim() || verifyingPin || deletingEvent}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm shadow-orange-600/20 cursor-pointer"
                 >
                   {verifyingPin ? 'Memeriksa...' : 'Buka Dashboard'}
+                </button>
+              </div>
+
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-[11px] text-slate-400">Ingin menghapus acara ini?</span>
+                <button
+                  type="button"
+                  onClick={handleDeleteFromHome}
+                  disabled={!pinInput.trim() || deletingEvent || verifyingPin}
+                  className="text-[11px] font-bold text-red-600 hover:text-red-700 disabled:opacity-40 hover:underline flex items-center gap-1 cursor-pointer"
+                  title="Masukkan PIN PIC di atas, lalu klik Hapus Acara"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>{deletingEvent ? 'Menghapus...' : 'Hapus Acara'}</span>
                 </button>
               </div>
             </form>

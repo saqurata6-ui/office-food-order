@@ -144,3 +144,52 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params;
+    const cleanId = decodeURIComponent(id || '').trim();
+    const event = await db.getEvent(cleanId);
+
+    if (!event) {
+      return NextResponse.json(
+        { success: false, message: 'Acara tidak ditemukan' },
+        { status: 404 }
+      );
+    }
+
+    const url = new URL(req.url);
+    const pin = url.searchParams.get('pin');
+
+    let requestPin = pin;
+    if (!requestPin) {
+      try {
+        const body = await req.json();
+        requestPin = body.pin || body.adminPin;
+      } catch (e) {}
+    }
+
+    if (!requestPin || requestPin.trim() !== event.adminPin.trim()) {
+      return NextResponse.json(
+        { success: false, message: 'PIN PIC salah. Tidak diizinkan menghapus acara.' },
+        { status: 403 }
+      );
+    }
+
+    await db.deleteEvent(event.id);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Acara berhasil dihapus permanen',
+    });
+  } catch (error) {
+    console.error('Error deleting event:', error);
+    return NextResponse.json(
+      { success: false, message: 'Gagal menghapus acara' },
+      { status: 500 }
+    );
+  }
+}
