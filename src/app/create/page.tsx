@@ -48,13 +48,7 @@ export default function CreateEventPage() {
   const [rounding, setRounding] = useState<RoundingType>('none');
 
   // Menu items list
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([
-    { id: '1', name: 'Soto Ayam Kampung Besar', price: 13000, category: 'Menu Makanan', description: 'Best Seller' },
-    { id: '2', name: 'Soto Sapi Pisah', price: 16000, category: 'Menu Makanan' },
-    { id: '3', name: 'Sate Telur Puyuh', price: 6000, category: 'Menu Sate' },
-    { id: '4', name: 'Tempe Mendoan', price: 2500, category: 'Menu Gorengan' },
-    { id: '5', name: 'Es Teh Manis', price: 6000, category: 'Menu Minuman' },
-  ]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
   // Single manual item form
   const [newItemName, setNewItemName] = useState('');
