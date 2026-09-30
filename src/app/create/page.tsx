@@ -44,8 +44,8 @@ export default function CreateEventPage() {
   const [taxPercent, setTaxPercent] = useState(10);
   const [useServiceCharge, setUseServiceCharge] = useState(false);
   const [serviceChargePercent, setServiceChargePercent] = useState(5);
-  const [allowItemNotes, setAllowItemNotes] = useState(true);
-  const [rounding, setRounding] = useState<RoundingType>('floor_1000'); // Default sesuai nota user!
+  const [allowItemNotes, setAllowItemNotes] = useState(false);
+  const [rounding, setRounding] = useState<RoundingType>('none');
 
   // Menu items list
   const [menuItems, setMenuItems] = useState<MenuItem[]>([
@@ -1151,6 +1151,12 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {[
                   {
+                    value: 'none',
+                    badge: 'Default',
+                    label: 'Tanpa Pembulatan (Default)',
+                    sub: 'Nominal asli tanpa perubahan: Rp 206.250',
+                  },
+                  {
                     value: 'floor_1000',
                     badge: 'Sesuai Nota Resto',
                     label: 'Bulatkan ke Bawah (Sesuai Nota Resto)',
@@ -1168,14 +1174,8 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                     label: 'Bulatkan ke Atas ke Rp 1.000',
                     sub: 'Rp 206.250 ➔ Rp 207.000 (+Rp 750)',
                   },
-                  {
-                    value: 'none',
-                    badge: 'Standard',
-                    label: 'Tanpa Pembulatan',
-                    sub: 'Nominal asli tanpa perubahan: Rp 206.250',
-                  },
                 ].map((opt) => {
-                  const isSelected = rounding === opt.value || (opt.value === 'floor_1000' && rounding === 'floor_500');
+                  const isSelected = rounding === opt.value;
                   return (
                     <button
                       key={opt.value}
@@ -1191,7 +1191,9 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                         <span className="text-xs font-bold text-slate-900 leading-tight">{opt.label}</span>
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 ${
-                            opt.value.startsWith('floor')
+                            opt.value === 'none'
+                              ? 'bg-blue-100 text-blue-800'
+                              : opt.value.startsWith('floor')
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-slate-100 text-slate-600'
                           }`}

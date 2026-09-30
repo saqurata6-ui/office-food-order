@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     // Admin PIN (4-digit)
     const adminPin = Math.floor(1000 + Math.random() * 9000).toString();
 
-    const effectiveAllowNotes = allowItemNotes !== undefined ? Boolean(allowItemNotes) : (taxConfig?.allowItemNotes !== undefined ? Boolean(taxConfig.allowItemNotes) : true);
+    const effectiveAllowNotes = allowItemNotes !== undefined ? Boolean(allowItemNotes) : (taxConfig?.allowItemNotes !== undefined ? Boolean(taxConfig.allowItemNotes) : false);
 
     const newEvent: EventData = {
       id: eventId,
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
           taxPercent: 10,
           useServiceCharge: false,
           serviceChargePercent: 0,
-          rounding: 'floor_1000',
+          rounding: 'none',
         }),
         allowItemNotes: effectiveAllowNotes,
       },
