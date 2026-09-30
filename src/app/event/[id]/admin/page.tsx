@@ -40,6 +40,7 @@ import {
   Columns2,
   ClipboardCheck,
   UserCheck,
+  Coins,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
@@ -80,7 +81,7 @@ export default function EventAdminPage() {
   // Active Tab
   const [activeTab, setActiveTab] = useState<'resto' | 'splitbill' | 'menu'>('resto');
   const [searchName, setSearchName] = useState('');
-  const [paymentFilter, setPaymentFilter] = useState<'all' | 'unpaid' | 'paid'>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | 'unpaid' | 'paid' | 'change'>('all');
   const [restoSortBy, setRestoSortBy] = useState<'first_added' | 'latest_added' | 'qty_desc' | 'name_asc'>('first_added');
 
   // Tab 3: Menu search & filter
@@ -90,6 +91,7 @@ export default function EventAdminPage() {
   // Copy / Share Feedback
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedWA, setCopiedWA] = useState(false);
+  const [copiedChangeText, setCopiedChangeText] = useState(false);
 
   // Add / Edit menu form state
   const [newMenuName, setNewMenuName] = useState('');
@@ -641,6 +643,16 @@ export default function EventAdminPage() {
     return orders.filter((o) => o.isPaid).reduce((sum, o) => sum + o.totalAmount, 0);
   }, [orders]);
 
+  // Daftar pesanan tunai yang memiliki uang kembalian
+  const ordersWithChange = useMemo(() => {
+    return orders.filter((o) => o.isPaid && o.paymentMethod === 'cash' && (o.changeAmount || 0) > 0);
+  }, [orders]);
+
+  // Total nominal uang kembalian tunai yang harus disiapkan PIC
+  const totalChangeAmount = useMemo(() => {
+    return ordersWithChange.reduce((sum, o) => sum + (o.changeAmount || 0), 0);
+  }, [ordersWithChange]);
+
   // Filtered orders in split-bill tab
   const filteredOrders = useMemo(() => {
     let result = orders;
@@ -653,6 +665,8 @@ export default function EventAdminPage() {
       result = result.filter((o) => !o.isPaid);
     } else if (paymentFilter === 'paid') {
       result = result.filter((o) => o.isPaid);
+    } else if (paymentFilter === 'change') {
+      result = result.filter((o) => o.isPaid && o.paymentMethod === 'cash' && (o.changeAmount || 0) > 0);
     }
     return result;
   }, [orders, searchName, paymentFilter]);
@@ -721,6 +735,30 @@ export default function EventAdminPage() {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const text = encodeURIComponent(generateWhatsAppMessage(event, origin));
     window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+  };
+
+  // Helper pesan rekap uang kembalian untuk disalin atau dikirim ke WhatsApp
+  const generateChangeSummaryMessage = () => {
+    if (!event) return '';
+    const listLines = ordersWithChange
+      .map((o, idx) => {
+        return `${idx + 1}. *${o.userName}*: Kembali *${formatRupiah(o.changeAmount || 0)}* (Uang ${formatRupiah(o.paidAmount || 0)} - Tagihan ${formatRupiah(o.totalAmount)})`;
+      })
+      .join('\n');
+
+    return `💵 *REKAP UANG KEMBALIAN TUNAI* 💵\nAcara: *${event.title}* (${event.restaurantName})\nPIC: *${event.picName}*\n\nBerikut rincian uang kembalian rekan kantor:\n\n${listLines}\n\n*Total Kembalian Disiapkan:* *${formatRupiah(totalChangeAmount)}*\n(${ordersWithChange.length} orang)\n\nSilakan ambil kembalian ke PIC ya. Terima kasih! 🙏`;
+  };
+
+  const copyChangeSummaryToWhatsApp = () => {
+    const msg = generateChangeSummaryMessage();
+    navigator.clipboard.writeText(msg);
+    setCopiedChangeText(true);
+    setTimeout(() => setCopiedChangeText(false), 2500);
+  };
+
+  const openWhatsAppChangeSummary = () => {
+    const msg = generateChangeSummaryMessage();
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   if (loading) {
@@ -1213,9 +1251,16 @@ export default function EventAdminPage() {
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <p className="text-xl sm:text-2xl font-extrabold text-emerald-600 truncate">{formatRupiah(totalCollectedBills)}</p>
-          <p className="text-[11px] text-emerald-700 font-medium">
-            Terkumpul: {formatRupiah(totalPaidAmount)}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+            <span className="text-emerald-700 font-medium">
+              Terkumpul: {formatRupiah(totalPaidAmount)}
+            </span>
+            {totalChangeAmount > 0 && (
+              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold text-[10px]" title="Total uang kembalian tunai">
+                Kembali: {formatRupiah(totalChangeAmount)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1524,6 +1569,26 @@ export default function EventAdminPage() {
               </span>
             </button>
 
+            {ordersWithChange.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('change')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 border ${
+                  paymentFilter === 'change'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-blue-50/80 text-blue-800 border-blue-200 hover:bg-blue-100'
+                }`}
+              >
+                <Coins className="w-3.5 h-3.5" />
+                <span>Ada Kembalian</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  paymentFilter === 'change' ? 'bg-blue-700 text-blue-100' : 'bg-blue-200 text-blue-800'
+                }`}>
+                  {ordersWithChange.length}
+                </span>
+              </button>
+            )}
+
             {/* Tombol Cetak Seluruh Nota Karyawan */}
             <button
               type="button"
@@ -1536,6 +1601,79 @@ export default function EventAdminPage() {
               <span>Cetak Semua Nota</span>
             </button>
           </div>
+
+          {/* Card Rekap Uang Kembalian Tunai (Otomatis tampil jika ada rekan kantor yang membayar tunai lebih dan butuh kembalian) */}
+          {ordersWithChange.length > 0 && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-indigo-50/60 border border-blue-200/80 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                    <Coins className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs sm:text-sm font-extrabold text-blue-950">
+                        Rekap Uang Kembalian Tunai
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-blue-200/80 text-blue-900 text-[10px] font-extrabold">
+                        {ordersWithChange.length} Rekan
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-blue-700">
+                      Total uang kembalian disiapkan PIC:{' '}
+                      <strong className="text-blue-900 text-xs">{formatRupiah(totalChangeAmount)}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tombol Bagikan WhatsApp */}
+                <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={copyChangeSummaryToWhatsApp}
+                    title="Salin daftar kembalian ke clipboard"
+                    className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-blue-50 border border-blue-300 text-blue-800 text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    {copiedChangeText ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Copy className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                    <span>{copiedChangeText ? 'Tersalin!' : 'Salin Rekap'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={openWhatsAppChangeSummary}
+                    title="Kirim daftar kembalian ke WhatsApp"
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Kirim ke WA</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Rincian Nama & Kembalian Karyawan */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-0.5">
+                {ordersWithChange.map((o) => (
+                  <div
+                    key={o.id}
+                    className="p-2 rounded-xl bg-white/90 border border-blue-100 flex items-center justify-between text-xs hover:border-blue-300 transition shadow-2xs"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="font-bold text-slate-800 truncate">{o.userName}</div>
+                      <div className="text-[10px] text-slate-500">
+                        Uang {formatRupiah(o.paidAmount || 0)} • Tagihan {formatRupiah(o.totalAmount)}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] text-slate-400 font-medium">Kembali</div>
+                      <div className="text-xs font-black text-amber-700">
+                        {formatRupiah(o.changeAmount || 0)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {filteredOrders.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-sm">
@@ -1721,6 +1859,12 @@ export default function EventAdminPage() {
                       {paidOrdersCount} / {orders.length} Orang Lunas
                     </span>
                   </div>
+                  {totalChangeAmount > 0 && (
+                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-emerald-200/40 text-amber-800 font-semibold">
+                      <span>Total Kembalian Tunai:</span>
+                      <strong>{formatRupiah(totalChangeAmount)} ({ordersWithChange.length} orang)</strong>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1853,7 +1997,12 @@ export default function EventAdminPage() {
                         {formatRupiah(totalCollectedBills)}
                       </td>
                       <td colSpan={2} className="py-3 px-4 text-center text-xs text-slate-600">
-                        {paidOrdersCount} / {orders.length} Orang Lunas
+                        <div>{paidOrdersCount} / {orders.length} Orang Lunas</div>
+                        {totalChangeAmount > 0 && (
+                          <div className="text-[11px] text-amber-700 font-bold mt-0.5">
+                            Total Kembali: {formatRupiah(totalChangeAmount)}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   </tfoot>
