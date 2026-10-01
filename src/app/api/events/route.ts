@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventData } from '@/types';
 import { nanoid } from 'nanoid';
-import { normalizeName } from '@/lib/calculator';
+import { normalizeName, normalizeMenuCategory } from '@/lib/calculator';
 
 export async function GET() {
   try {
@@ -127,7 +127,10 @@ export async function POST(req: NextRequest) {
         allowItemNotes: effectiveAllowNotes,
       },
       allowItemNotes: effectiveAllowNotes,
-      menuItems: menuItems || [],
+      menuItems: (menuItems || []).map((m: any) => ({
+        ...m,
+        category: normalizeMenuCategory(m.category, m.name),
+      })),
       isLocked: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

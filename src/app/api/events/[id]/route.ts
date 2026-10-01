@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { calculateOrder } from '@/lib/calculator';
+import { calculateOrder, normalizeMenuCategory } from '@/lib/calculator';
 
 export async function GET(
   req: NextRequest,
@@ -23,6 +23,26 @@ export async function GET(
         { success: false, message: 'Acara tidak ditemukan', availableEvents: allEvents },
         { status: 404 }
       );
+    }
+
+    // Auto-normalisasi kategori menu yang belum standar (tanpa menyentuh atau menghapus data pesanan)
+    let hasCategoryFix = false;
+    if (event.menuItems && Array.isArray(event.menuItems)) {
+      event.menuItems = event.menuItems.map((m) => {
+        const cleanCat = normalizeMenuCategory(m.category, m.name);
+        if (cleanCat !== m.category) {
+          hasCategoryFix = true;
+        }
+        return {
+          ...m,
+          category: cleanCat,
+        };
+      });
+    }
+
+    if (hasCategoryFix) {
+      // Simpan perubahan kategori ke database secara aman tanpa mengubah pesanan
+      db.saveEvent(event).catch((e) => console.error('Error auto-persisting normalized categories:', e));
     }
 
     const orders = await db.getOrders(event.id);
@@ -81,7 +101,10 @@ export async function PATCH(
 
     const updatedEvent = (await db.getEvent(event.id))!;
     if (menuItems && Array.isArray(menuItems)) {
-      updatedEvent.menuItems = menuItems;
+      updatedEvent.menuItems = menuItems.map((m: any) => ({
+        ...m,
+        category: normalizeMenuCategory(m.category, m.name),
+      }));
     }
 
     if (allowItemNotes !== undefined) {

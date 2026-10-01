@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { nanoid } from 'nanoid';
 import { getFullMrSuprekMenu } from '@/data/mr-suprek-menu';
 export { getFullMrSuprekMenu } from '@/data/mr-suprek-menu';
+import { normalizeMenuCategory } from '@/lib/calculator';
 
 export async function GET() {
   const apiKey = (
@@ -279,20 +280,24 @@ Kembalikan SELURUH menu dalam format array JSON murni:
   {
     "name": "Nama Menu",
     "price": 12000,
-    "category": "Kategori (contoh: Makanan, Minuman, Sate, Gorengan, Lainnya)",
+    "category": "Kategori terstandarisasi (Makanan, Minuman, atau Sate & Gorengan)",
     "description": "Keterangan / bahan / komposisi detail jika ada di buku menu (contoh: Nasi, Ayam, Telur Mata Sapi). Jika tidak ada, kosongkan (\"\")",
     "box_2d": [ymin, xmin, ymax, xmax]
   }
 ]
 
 Aturan ketat:
-1. 'price' harus angka integer bulat murni dalam Rupiah tanpa titik/koma/simbol Rp (misal 12000, 2500, 50000). Jika tertulis 24 ribu jadikan 24000.
-2. 'box_2d' adalah koordinat 2D bounding box area foto makanan/minuman tersebut dalam format normalized 0 sampai 1000 [ymin, xmin, ymax, xmax].
+1. 'category' harus dikelompokkan secara konsisten menggunakan Title Case:
+   - "Makanan" (untuk soto, nasi pecel, rawon, mie, olahan nasi/ayam/daging utama)
+   - "Minuman" (untuk wedhang, teh, kopi, es, jus, air mineral, dsb)
+   - "Sate & Gorengan" (untuk aneka sate seperti sate usus/cecek/paru/kulit/ati, aneka gorengan seperti dadar jagung, perkedel, mendoan, ote-ote, tahu baso, ceker, telur/telor, kerupuk, lauk pelengkap). Jangan memisahkan sate dan gorengan menjadi kategori berbeda!
+2. 'price' harus angka integer bulat murni dalam Rupiah tanpa titik/koma/simbol Rp (misal 12000, 2500, 50000). Jika tertulis 2.5 atau 2,5 dalam ribuan jadikan 2500. Jika tertulis 11 jadikan 11000.
+3. 'box_2d' adalah koordinat 2D bounding box area foto makanan/minuman tersebut dalam format normalized 0 sampai 1000 [ymin, xmin, ymax, xmax].
    - Jika terdapat foto hidangan untuk menu tersebut di foto dokumen, berikan kotak fotonya secara presisi.
    - Jika menu TIDAK memiliki foto khusus (hanya berupa teks nama/harga), isi 'box_2d' dengan null.
-3. Jangan batasi hanya 5 atau 10 item! Ekstrak semua baris item yang tertera di gambar (bisa mencapai 30-80 item).
-4. Jika terdapat rincian bahan/komposisi/keterangan makanan di bawah nama menu, sertakan di 'description'. Jika tidak ada, isi string kosong "".
-5. Hanya kembalikan array JSON murni, jangan ada kata pengantar atau penutup.
+4. Jangan batasi hanya 5 atau 10 item! Ekstrak semua baris item yang tertera di gambar (bisa mencapai 30-80 item).
+5. Jika terdapat rincian bahan/komposisi/keterangan makanan di bawah nama menu, sertakan di 'description'. Jika tidak ada, isi string kosong "".
+6. Hanya kembalikan array JSON murni, jangan ada kata pengantar atau penutup.
 `;
 
           const response = await ai.models.generateContent({
@@ -321,7 +326,7 @@ Aturan ketat:
               id: `item_${nanoid(6)}`,
               name: String(it.name || 'Menu').trim(),
               price: Number(it.price) || 0,
-              category: String(it.category || 'Makanan').trim(),
+              category: normalizeMenuCategory(String(it.category || 'Makanan').trim(), String(it.name || '')),
               description: it.description ? String(it.description).trim() : '',
               box_2d: Array.isArray(it.box_2d) && it.box_2d.length === 4
                 ? (it.box_2d.map(Number) as [number, number, number, number])
@@ -415,7 +420,7 @@ function parseTextMenu(text: string) {
         id: `item_${nanoid(6)}`,
         name,
         price: isNaN(price) ? 20000 : price,
-        category: currentCategory,
+        category: normalizeMenuCategory(currentCategory, name),
         description: '',
       });
     } else {
@@ -427,7 +432,7 @@ function parseTextMenu(text: string) {
           id: `item_${nanoid(6)}`,
           name: name || line,
           price: parseInt(priceStr, 10) || 20000,
-          category: currentCategory,
+          category: normalizeMenuCategory(currentCategory, name || line),
           description: '',
         });
       }

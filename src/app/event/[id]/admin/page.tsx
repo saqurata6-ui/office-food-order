@@ -41,9 +41,11 @@ import {
   ClipboardCheck,
   UserCheck,
   Coins,
+  Wand2,
+  Sparkles,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
-import { formatRupiah, formatIndonesianDate } from '@/lib/calculator';
+import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories } from '@/lib/calculator';
 import {
   exportToExcel,
   exportToPdf,
@@ -153,6 +155,12 @@ export default function EventAdminPage() {
 
           if (localSaved) {
             const restored = JSON.parse(localSaved);
+            if (restored && Array.isArray(restored.menuItems)) {
+              restored.menuItems = restored.menuItems.map((m: any) => ({
+                ...m,
+                category: normalizeMenuCategory(m.category, m.name),
+              }));
+            }
             // Sinkronkan kembali ke database server
             await fetch('/api/events', {
               method: 'POST',
@@ -175,7 +183,14 @@ export default function EventAdminPage() {
         return;
       }
 
-      setEvent(json.data);
+      const eventData = json.data;
+      if (eventData && Array.isArray(eventData.menuItems)) {
+        eventData.menuItems = eventData.menuItems.map((m: any) => ({
+          ...m,
+          category: normalizeMenuCategory(m.category, m.name),
+        }));
+      }
+      setEvent(eventData);
       const serverOrders: UserOrder[] = json.orders || [];
       setOrders(serverOrders);
 
@@ -513,7 +528,7 @@ export default function EventAdminPage() {
     setEditingItemId(item.id);
     setNewMenuName(item.name);
     setNewMenuPrice(item.price.toString());
-    setNewMenuCategory(item.category || 'Makanan');
+    setNewMenuCategory(normalizeMenuCategory(item.category, item.name));
     // Scroll smoothly to form
     const formElement = document.getElementById('menu-item-form');
     if (formElement) {
@@ -537,6 +552,7 @@ export default function EventAdminPage() {
     const price = parseInt(newMenuPrice.toString().replace(/\D/g, ''), 10);
     if (isNaN(price) || price <= 0) return;
 
+    const cleanCategory = normalizeMenuCategory(newMenuCategory, newMenuName.trim());
     let updatedMenuItems: MenuItem[];
 
     if (editingItemId) {
@@ -547,7 +563,7 @@ export default function EventAdminPage() {
               ...it,
               name: newMenuName.trim(),
               price,
-              category: newMenuCategory,
+              category: cleanCategory,
             }
           : it
       );
@@ -557,7 +573,7 @@ export default function EventAdminPage() {
         id: `item_${nanoid(6)}`,
         name: newMenuName.trim(),
         price,
-        category: newMenuCategory,
+        category: cleanCategory,
       };
       updatedMenuItems = [...event.menuItems, newItem];
     }
@@ -582,6 +598,42 @@ export default function EventAdminPage() {
     } catch (err) {
       console.error(err);
       alert('Terjadi kesalahan saat menyimpan menu.');
+    }
+  };
+
+  // Rapikan seluruh kategori menu acara ini ke standar (Makanan, Minuman, Sate & Gorengan)
+  const [isNormalizingCategories, setIsNormalizingCategories] = useState(false);
+
+  const handleAutoStandardizeCategories = async () => {
+    if (!event) return;
+    setIsNormalizingCategories(true);
+    try {
+      const cleanedMenuItems = event.menuItems.map((m) => ({
+        ...m,
+        category: normalizeMenuCategory(m.category, m.name),
+      }));
+
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          menuItems: cleanedMenuItems,
+          adminPin,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setEvent((prev) => (prev ? { ...prev, menuItems: cleanedMenuItems } : null));
+        alert('Kategori menu berhasil dirapikan secara otomatis (Makanan, Minuman, Sate & Gorengan) tanpa mengubah data pesanan!');
+      } else {
+        alert(json.message || 'Gagal merapikan kategori.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi.');
+    } finally {
+      setIsNormalizingCategories(false);
     }
   };
 
@@ -671,18 +723,22 @@ export default function EventAdminPage() {
     return result;
   }, [orders, searchName, paymentFilter]);
 
-  // Categories in Tab 3
+  // Categories in Tab 3 (Terstandarisasi: Makanan, Minuman, Sate & Gorengan)
   const menuCategories = useMemo(() => {
     if (!event) return ['Semua'];
-    const cats = Array.from(new Set(event.menuItems.map((m) => m.category || 'Makanan')));
-    return ['Semua', ...cats];
+    const cats = Array.from(
+      new Set(event.menuItems.map((m) => normalizeMenuCategory(m.category, m.name)))
+    );
+    const sorted = sortCategories(cats);
+    return ['Semua', ...sorted];
   }, [event]);
 
   // Filtered menu items in Tab 3
   const filteredMenuItems = useMemo(() => {
     if (!event) return [];
     return event.menuItems.filter((m) => {
-      const matchesCat = selectedMenuCategory === 'Semua' || (m.category || 'Makanan') === selectedMenuCategory;
+      const itemCat = normalizeMenuCategory(m.category, m.name);
+      const matchesCat = selectedMenuCategory === 'Semua' || itemCat === selectedMenuCategory;
       const matchesQuery = !searchMenuQuery.trim() || m.name.toLowerCase().includes(searchMenuQuery.toLowerCase().trim());
       return matchesCat && matchesQuery;
     });
@@ -2105,6 +2161,7 @@ export default function EventAdminPage() {
                   >
                     <option value="Makanan">Makanan</option>
                     <option value="Minuman">Minuman</option>
+                    <option value="Sate & Gorengan">Sate & Gorengan</option>
                     <option value="Cemilan">Cemilan</option>
                     <option value="Paket">Paket</option>
                     <option value="Lainnya">Lainnya</option>
@@ -2137,6 +2194,34 @@ export default function EventAdminPage() {
               </div>
             </div>
           </form>
+
+          {/* Banner Rapikan Kategori (Jika ada kategori yg belum terstandarisasi) */}
+          {event.menuItems.some((m) => m.category !== normalizeMenuCategory(m.category, m.name)) && (
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                  <Wand2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">
+                    Kategori Menu Dapat Dirapikan Otomatis
+                  </h4>
+                  <p className="text-[11px] text-amber-800">
+                    Standarisasi seluruh menu ke dalam 3 kategori rapi: <strong>Makanan</strong>, <strong>Minuman</strong>, dan <strong>Sate & Gorengan</strong> tanpa mengubah data pesanan.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoStandardizeCategories}
+                disabled={isNormalizingCategories}
+                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs shrink-0 self-end sm:self-auto cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isNormalizingCategories ? 'Merapikan...' : 'Rapikan Kategori Otomatis'}</span>
+              </button>
+            </div>
+          )}
 
           {/* Search & Category Filter Section */}
           <div className="space-y-2.5 pt-2 border-t border-slate-100">
@@ -2204,7 +2289,7 @@ export default function EventAdminPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 mb-0.5">
                           <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-600 font-semibold border border-slate-200/60">
-                            {item.category || 'Makanan'}
+                            {normalizeMenuCategory(item.category, item.name)}
                           </span>
                         </div>
                         <h4 className="font-bold text-slate-900 text-sm truncate leading-snug">

@@ -24,7 +24,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { MenuItem, TaxConfig, RoundingType } from '@/types';
-import { formatRupiah } from '@/lib/calculator';
+import { formatRupiah, normalizeMenuCategory } from '@/lib/calculator';
 import { nanoid } from 'nanoid';
 import { getFullHjHestiMenu, getFullTanjungApiMenu, getFullMrSuprekMenu } from '../api/parse-menu/route';
 
@@ -53,7 +53,7 @@ export default function CreateEventPage() {
   // Single manual item form
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
-  const [newItemCategory, setNewItemCategory] = useState('Menu Makanan');
+  const [newItemCategory, setNewItemCategory] = useState('Makanan');
   const [newItemDesc, setNewItemDesc] = useState('');
   const [newItemImage, setNewItemImage] = useState('');
 
@@ -84,7 +84,7 @@ export default function CreateEventPage() {
       id: `item_${nanoid(6)}`,
       name: newItemName.trim(),
       price,
-      category: newItemCategory || 'Menu Makanan',
+      category: normalizeMenuCategory(newItemCategory, newItemName.trim()),
       description: newItemDesc.trim(),
       imageUrl: newItemImage.trim() || undefined,
     };
@@ -904,10 +904,10 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                   onChange={(e) => setNewItemCategory(e.target.value)}
                   className="w-full px-2 py-2 rounded-lg border border-slate-300 text-xs bg-white text-slate-900 focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="Menu Makanan">Menu Makanan</option>
-                  <option value="Menu Sate">Menu Sate</option>
-                  <option value="Menu Gorengan">Menu Gorengan</option>
-                  <option value="Menu Minuman">Menu Minuman</option>
+                  <option value="Makanan">Makanan</option>
+                  <option value="Minuman">Minuman</option>
+                  <option value="Sate & Gorengan">Sate & Gorengan</option>
+                  <option value="Cemilan">Cemilan</option>
                   <option value="Lainnya">Lainnya</option>
                 </select>
               </div>
@@ -984,7 +984,7 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-slate-900">{item.name}</span>
                           <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] shrink-0 font-medium">
-                            {item.category}
+                            {normalizeMenuCategory(item.category, item.name)}
                           </span>
                         </div>
                         {item.description && (

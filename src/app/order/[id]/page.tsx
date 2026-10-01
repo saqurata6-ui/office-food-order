@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
-import { formatRupiah, calculateOrder, normalizeName, formatIndonesianDate } from '@/lib/calculator';
+import { formatRupiah, calculateOrder, normalizeName, formatIndonesianDate, normalizeMenuCategory, sortCategories } from '@/lib/calculator';
 
 export default function OrderPage() {
   const params = useParams();
@@ -77,6 +77,12 @@ export default function OrderPage() {
           const localSaved = localStorage.getItem(`makan_kantor_event_${eventId}`);
           if (localSaved) {
             const restored = JSON.parse(localSaved);
+            if (restored && Array.isArray(restored.menuItems)) {
+              restored.menuItems = restored.menuItems.map((m: any) => ({
+                ...m,
+                category: normalizeMenuCategory(m.category, m.name),
+              }));
+            }
             await fetch('/api/events', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -94,8 +100,15 @@ export default function OrderPage() {
         }
         setError(json.message || 'Acara tidak ditemukan.');
       } else {
-        setEvent(json.data);
-        setShowTaxEstimate(Boolean(json.data.taxConfig?.useTax));
+        const eventData = json.data;
+        if (eventData && Array.isArray(eventData.menuItems)) {
+          eventData.menuItems = eventData.menuItems.map((m: any) => ({
+            ...m,
+            category: normalizeMenuCategory(m.category, m.name),
+          }));
+        }
+        setEvent(eventData);
+        setShowTaxEstimate(Boolean(eventData.taxConfig?.useTax));
         const serverOrders: UserOrder[] = json.orders || [];
         setOrders(serverOrders);
 
@@ -160,18 +173,23 @@ export default function OrderPage() {
     setShowTaxEstimate(Boolean(event?.taxConfig?.useTax));
   };
 
-  // Categories list
+  // Categories list (Terstandarisasi: Makanan, Minuman, Sate & Gorengan)
   const categories = useMemo(() => {
     if (!event) return ['Semua'];
-    const cats = new Set(event.menuItems.map((it) => it.category || 'Makanan'));
-    return ['Semua', ...Array.from(cats)];
+    const cats = new Set(
+      event.menuItems.map((it) => normalizeMenuCategory(it.category, it.name))
+    );
+    const sorted = sortCategories(Array.from(cats));
+    return ['Semua', ...sorted];
   }, [event]);
 
   // Filtered menu items
   const filteredMenuItems = useMemo(() => {
     if (!event) return [];
     if (activeCategory === 'Semua') return event.menuItems;
-    return event.menuItems.filter((it) => (it.category || 'Makanan') === activeCategory);
+    return event.menuItems.filter(
+      (it) => normalizeMenuCategory(it.category, it.name) === activeCategory
+    );
   }, [event, activeCategory]);
 
   // Handle Qty change
@@ -856,7 +874,7 @@ export default function OrderPage() {
                       </h3>
                       {item.category && (
                         <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
-                          {item.category}
+                          {normalizeMenuCategory(item.category, item.name)}
                         </span>
                       )}
                     </div>

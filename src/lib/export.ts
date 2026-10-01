@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { EventData, UserOrder, MenuItem } from '@/types';
-import { formatRupiah, formatIndonesianDate } from './calculator';
+import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories } from './calculator';
 
 export function getGroupedRestaurantOrders(
   orders: UserOrder[],
@@ -381,44 +381,12 @@ export function exportToKitchenPdf(event: EventData, orders: UserOrder[]) {
   doc.save(filename);
 }
 
-// Helper universal untuk mendeteksi apakah suatu item tergolong Minuman atau Makanan
-// Prioritas: 1) Kategori resmi di menuItem, 2) Kata kunci kategori, 3) Kata kunci nama item
+// Helper universal untuk mendeteksi apakah suatu item tergolong Minuman
 export function isBeverageItem(menuItemId: string, menuName: string, menuItems: MenuItem[] = []): boolean {
-  // 1. Cek dari daftar menu acara berdasarkan ID atau kecocokan nama
   const foundItem = menuItems.find(
-    (m) => m.id === menuItemId || m.name.toLowerCase().trim() === menuName.toLowerCase().trim()
+    (m) => m.id === menuItemId || m.name.toLowerCase().trim() === (menuName || '').toLowerCase().trim()
   );
-  const cat = (foundItem?.category || '').toLowerCase().trim();
-  const name = (menuName || foundItem?.name || '').toLowerCase().trim();
-
-  // Jika kategorinya jelas menyebut Minuman / Drink / Beverage
-  if (cat.includes('minum') || cat.includes('drink') || cat.includes('beverage')) {
-    return true;
-  }
-  // Jika kategorinya jelas menyebut Makanan / Sate / Gorengan / Snack / Cemilan / Paket / Lauk / Nasi
-  if (
-    cat.includes('makan') ||
-    cat.includes('sate') ||
-    cat.includes('goreng') ||
-    cat.includes('snack') ||
-    cat.includes('cemil') ||
-    cat.includes('paket') ||
-    cat.includes('lauk') ||
-    cat.includes('nasi') ||
-    cat.includes('mie') ||
-    cat.includes('soto')
-  ) {
-    return false;
-  }
-
-  // 2. Fallback deteksi dari kata kunci nama menu (hanya jika kategorinya 'Lainnya' atau kosong)
-  const drinkKeywords = [
-    'es ', 'es-', 'es.', ' ice ', 'ice ', 'teh', 'tea', 'kopi', 'coffee',
-    'jeruk', 'lemon', 'air mineral', 'mineral', 'aqua', 'le minerale',
-    'juice', 'jus', 'susu', 'milk', 'boba', 'latte', 'cappuccino', 'syrup',
-    'sirup', 'wedang', 'jahe', 'liang teh', 'soda', 'coca', 'fanta', 'sprite'
-  ];
-  return drinkKeywords.some((kw) => name.includes(kw));
+  return normalizeMenuCategory(foundItem?.category, menuName || foundItem?.name) === 'Minuman';
 }
 
 // Rekap PDF Format 1/2 A4 Landscape (210mm x 148.5mm / A5 Landscape, Kiri-Kanan)
@@ -441,7 +409,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   const knownCategories: string[] = [];
   if (event.menuItems && Array.isArray(event.menuItems)) {
     event.menuItems.forEach((m) => {
-      const cat = (m.category || '').trim();
+      const cat = normalizeMenuCategory(m.category, m.name);
       if (cat && !knownCategories.includes(cat)) {
         knownCategories.push(cat);
       }
@@ -456,12 +424,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
         (m) => m.id === item.menuItemId || m.name.toLowerCase().trim() === item.menuItemName.toLowerCase().trim()
       );
 
-      let category = (foundMenuItem?.category || '').trim();
-      if (!category) {
-        category = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || [])
-          ? 'Minuman'
-          : 'Makanan';
-      }
+      const category = normalizeMenuCategory(foundMenuItem?.category, item.menuItemName);
 
       if (!categoryMap[category]) {
         categoryMap[category] = {};
@@ -715,7 +678,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
   const knownCategories: string[] = [];
   if (event.menuItems && Array.isArray(event.menuItems)) {
     event.menuItems.forEach((m) => {
-      const cat = (m.category || '').trim();
+      const cat = normalizeMenuCategory(m.category, m.name);
       if (cat && !knownCategories.includes(cat)) {
         knownCategories.push(cat);
       }
@@ -733,13 +696,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
         (m) => m.id === item.menuItemId || m.name.toLowerCase().trim() === item.menuItemName.toLowerCase().trim()
       );
 
-      let category = (foundMenuItem?.category || '').trim();
-      if (!category) {
-        // Fallback deteksi pintar jika kategori di database kosong
-        category = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || [])
-          ? 'Minuman'
-          : 'Makanan';
-      }
+      const category = normalizeMenuCategory(foundMenuItem?.category, item.menuItemName);
 
       if (!categoryMap[category]) {
         categoryMap[category] = {};
