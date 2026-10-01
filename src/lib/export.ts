@@ -1795,3 +1795,172 @@ export function exportSingleOrderToReceiptPdf(event: EventData, order: UserOrder
   const cleanName = order.userName.replace(/[^a-zA-Z0-9]/g, '_');
   doc.save(`Nota_${cleanName}_${event.date}.pdf`);
 }
+
+/**
+ * Rekap PDF Uang Kembalian Tunai (A4 Portrait)
+ * Memuat ringkasan total uang kembalian yang harus disiapkan PIC
+ * beserta tabel rincian per karyawan lengkap dengan paraf/checklist serah terima fisik.
+ */
+export function exportCashChangePdf(
+  event: EventData,
+  ordersWithChange: UserOrder[],
+  totalChangeAmount: number
+) {
+  if (!ordersWithChange || ordersWithChange.length === 0) {
+    alert('Tidak ada data uang kembalian tunai untuk dicetak.');
+    return;
+  }
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2;
+
+  // Header Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text('REKAP UANG KEMBALIAN TUNAI', margin, 20);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139); // slate-500
+  const dateStr = formatIndonesianDate(event.date) + (event.time ? ` pk ${event.time} WIB` : '');
+  doc.text(`${dateStr}`, pageWidth - margin, 20, { align: 'right' });
+
+  // Subtitle Resto & PIC
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(30, 41, 59);
+  const restoTitle = (event.restaurantName || event.title).toUpperCase();
+  doc.text(restoTitle, margin, 27);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`PIC: ${event.picName || '-'} | Acara: ${event.title}`, pageWidth - margin, 27, { align: 'right' });
+
+  // Divider
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 30, pageWidth - margin, 30);
+
+  // Summary Banner Box
+  const bannerY = 34;
+  const bannerHeight = 16;
+  doc.setFillColor(239, 246, 255); // blue-50
+  doc.setDrawColor(191, 219, 254); // blue-200
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, bannerY, contentWidth, bannerHeight, 2, 2, 'FD');
+
+  // Left text: Jumlah Rekan
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 58, 138); // blue-900
+  doc.text(`Total Penerima Kembalian: ${ordersWithChange.length} Orang`, margin + 5, bannerY + 7);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(59, 130, 246); // blue-500
+  doc.text('Siapkan pecahan uang tunai yang sesuai sebelum membagikan kembalian.', margin + 5, bannerY + 12);
+
+  // Right text: Total Nominal Kembalian
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(180, 83, 9); // amber-700
+  doc.text(formatRupiah(totalChangeAmount), pageWidth - margin - 5, bannerY + 7.5, { align: 'right' });
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('TOTAL UANG KEMBALIAN', pageWidth - margin - 5, bannerY + 12, { align: 'right' });
+
+  // Tabel Daftar Penerima
+  const tableRows = ordersWithChange.map((o, idx) => [
+    idx + 1,
+    o.userName,
+    formatRupiah(o.totalAmount),
+    formatRupiah(o.paidAmount || 0),
+    formatRupiah(o.changeAmount || 0),
+    '', // Kolom checklist / paraf tanda terima
+  ]);
+
+  const totalBill = ordersWithChange.reduce((acc, o) => acc + o.totalAmount, 0);
+  const totalPaid = ordersWithChange.reduce((acc, o) => acc + (o.paidAmount || 0), 0);
+
+  autoTable(doc, {
+    startY: bannerY + bannerHeight + 6,
+    margin: { left: margin, right: margin },
+    tableWidth: contentWidth,
+    head: [[
+      'NO',
+      'NAMA PEMESAN',
+      'TAGIHAN',
+      'UANG DIBAYAR',
+      'UANG KEMBALI',
+      'PARAF / CEK',
+    ]],
+    body: tableRows,
+    foot: [[
+      '',
+      'TOTAL',
+      formatRupiah(totalBill),
+      formatRupiah(totalPaid),
+      formatRupiah(totalChangeAmount),
+      '',
+    ]],
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 58, 138], // blue-900
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      halign: 'center',
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+    },
+    bodyStyles: {
+      fontSize: 8.5,
+      textColor: [30, 41, 59],
+      cellPadding: { top: 2.8, bottom: 2.8, left: 2.5, right: 2.5 },
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
+      lineColor: [203, 213, 225],
+      lineWidth: 0.3,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
+      1: { cellWidth: 55, halign: 'left', fontStyle: 'bold' },
+      2: { cellWidth: 32, halign: 'right' },
+      3: { cellWidth: 32, halign: 'right' },
+      4: { cellWidth: 33, halign: 'right', fontStyle: 'bold', textColor: [180, 83, 9] },
+      5: { cellWidth: 18, halign: 'center' },
+    },
+  });
+
+  // Footer Dokumen
+  const finalY = (doc as any).lastAutoTable.finalY + 8;
+  if (finalY < pageHeight - 20) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('* Dokumen ini dicetak otomatis oleh MakanKantor untuk mempermudah PIC saat serah terima uang kembalian tunai.', margin, finalY);
+  }
+
+  // Simpan File PDF
+  const cleanResto = (event.restaurantName || event.title || 'Kembalian').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Rekap_Kembalian_Tunai_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
+}

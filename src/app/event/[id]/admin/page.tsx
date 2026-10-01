@@ -54,6 +54,7 @@ import {
   exportToLandscapeHalfA4Pdf,
   exportToSlipOrderHalfA4Pdf,
   exportToPersonOrderHalfA4Pdf,
+  exportCashChangePdf,
   printIndividualThermalReceipt,
   printAllIndividualThermalReceipts,
   exportSingleOrderToReceiptPdf,
@@ -1250,6 +1251,36 @@ export default function EventAdminPage() {
                         </div>
                       </div>
                     </button>
+
+                    {ordersWithChange.length > 0 && (
+                      <>
+                        <div className="h-px bg-slate-100 my-1" />
+                        {/* Opsi 4: Rekap Uang Kembalian Tunai (A4) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            exportCashChangePdf(event, ordersWithChange, totalChangeAmount);
+                            setIsPdfDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-600 group-hover:text-white transition">
+                            <Coins className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                              <span>Rekap Kembalian Tunai (A4)</span>
+                              <span className="px-1.5 py-0.2 bg-blue-100 text-blue-700 text-[9px] font-bold rounded">
+                                {ordersWithChange.length} Rekan
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                              Daftar uang kembalian tunai per pemesan beserta kolom paraf serah terima.
+                            </div>
+                          </div>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </>
               )}
@@ -1703,6 +1734,16 @@ export default function EventAdminPage() {
                   >
                     <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>Kirim ke WA</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => exportCashChangePdf(event!, ordersWithChange, totalChangeAmount)}
+                    title="Cetak atau Unduh PDF Rekap Uang Kembalian Tunai"
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 shrink-0" />
+                    <span>Cetak / PDF</span>
                   </button>
                 </div>
               </div>
