@@ -980,33 +980,32 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
     });
   });
 
-  // 2. Kumpulkan master kategori & menu
+  // 2. Kumpulkan master kategori & menu yang dipesan (qty > 0)
   const categoryGroups: Record<string, Array<{ id: string; name: string; qty: number; notes: string[] }>> = {};
   const knownCategories: string[] = [];
 
   // Ambil dari master menu event jika ada
   if (event.menuItems && Array.isArray(event.menuItems) && event.menuItems.length > 0) {
     event.menuItems.forEach((m) => {
-      let cat = (m.category || '').trim();
-      if (!cat) {
-        cat = isBeverageItem(m.id, m.name, event.menuItems || []) ? 'Minuman' : 'Makanan';
-      }
-      if (!categoryGroups[cat]) {
-        categoryGroups[cat] = [];
-        knownCategories.push(cat);
-      }
-
       const keyById = m.id;
       const keyByName = m.name.toLowerCase().trim();
       const qty = orderQtyMap[keyById] || orderQtyMap[keyByName] || 0;
       const notes = orderNotesMap[keyById] || orderNotesMap[keyByName] || [];
 
-      categoryGroups[cat].push({
-        id: m.id,
-        name: m.name,
-        qty,
-        notes,
-      });
+      // Hanya masukkan jika menu ini dipilih/dipesan oleh peserta (qty > 0)
+      if (qty > 0) {
+        let cat = normalizeMenuCategory(m.category);
+        if (!categoryGroups[cat]) {
+          categoryGroups[cat] = [];
+          knownCategories.push(cat);
+        }
+        categoryGroups[cat].push({
+          id: m.id,
+          name: m.name,
+          qty,
+          notes,
+        });
+      }
     });
   }
 
@@ -1015,6 +1014,9 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
     order.items.forEach((item) => {
       const keyById = item.menuItemId;
       const keyByName = item.menuItemName.toLowerCase().trim();
+      const qty = orderQtyMap[keyById] || orderQtyMap[keyByName] || item.quantity;
+
+      if (qty <= 0) return;
 
       let alreadyExists = false;
       Object.values(categoryGroups).forEach((list) => {
@@ -1025,6 +1027,7 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
 
       if (!alreadyExists) {
         let cat = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || []) ? 'Minuman' : 'Makanan';
+        cat = normalizeMenuCategory(cat);
         if (!categoryGroups[cat]) {
           categoryGroups[cat] = [];
           knownCategories.push(cat);
@@ -1032,22 +1035,17 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
         categoryGroups[cat].push({
           id: item.menuItemId,
           name: item.menuItemName,
-          qty: orderQtyMap[keyById] || orderQtyMap[keyByName] || item.quantity,
+          qty,
           notes: orderNotesMap[keyById] || orderNotesMap[keyByName] || [],
         });
       }
     });
   });
 
-  // Jika master menu banyak (>35 item), prioritaskan hanya menu yang dipesan agar pas 1 lembar
-  const totalMenuItemsCount = Object.values(categoryGroups).reduce((sum, list) => sum + list.length, 0);
-  const filterOnlyOrdered = totalMenuItemsCount > 35;
-
+  // Hanya daftarkan kategori yang memiliki item pesanan (qty > 0)
   const finalCategoryList: string[] = [];
   knownCategories.forEach((cat) => {
-    if (filterOnlyOrdered) {
-      categoryGroups[cat] = categoryGroups[cat].filter((it) => it.qty > 0);
-    }
+    categoryGroups[cat] = (categoryGroups[cat] || []).filter((it) => it.qty > 0);
     if (categoryGroups[cat] && categoryGroups[cat].length > 0) {
       finalCategoryList.push(cat);
     }
