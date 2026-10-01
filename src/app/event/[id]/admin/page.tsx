@@ -43,6 +43,7 @@ import {
   Coins,
   Wand2,
   Sparkles,
+  Receipt,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
 import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories } from '@/lib/calculator';
@@ -1202,7 +1203,7 @@ export default function EventAdminPage() {
 
                     <div className="h-px bg-slate-100 my-1" />
 
-                    {/* Opsi 2: Rekap Pesanan per Kategori Menu (A4 Vertikal) */}
+                    {/* Opsi 2: Rekap Struk per Pemesan (A4 Vertikal) */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1212,15 +1213,15 @@ export default function EventAdminPage() {
                       className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer"
                     >
                       <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-emerald-600 group-hover:text-white transition">
-                        <ChefHat className="w-4 h-4" />
+                        <Receipt className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                          <span>Rekap per Kategori (A4 Vertikal)</span>
-                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Porsi & Catatan</span>
+                          <span>Rekap Struk per Pemesan (A4 Vertikal)</span>
+                          <span className="px-1.5 py-0.2 bg-emerald-100 text-emerald-700 text-[9px] font-bold rounded">Struk Kasir</span>
                         </div>
                         <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
-                          Daftar berurutan ke bawah per kategori menu, bersih tanpa harga.
+                          Kumpulan struk nota kasir dipisah per pemesan, siap cetak & potong di kertas A4.
                         </div>
                       </div>
                     </button>

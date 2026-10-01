@@ -673,7 +673,17 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.save(filename);
 }
 
+/**
+ * Rekap PDF Kumpulan Struk Nota Kasir per Pemesan (Format A4 Vertikal / Siap Cetak & Potong).
+ * Mengelompokkan seluruh struk per pemesan ke dalam kisi kertas A4 (2 kolom rapi),
+ * dengan format identik seperti struk nota kasir pada tab tagihan (lengkap dengan rincian, pajak, pembulatan, status bayar & kembalian).
+ */
 export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
+  if (!orders || orders.length === 0) {
+    alert('Belum ada pesanan untuk diekspor ke struk.');
+    return;
+  }
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -682,264 +692,258 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
 
   const pageWidth = 210;
   const pageHeight = 297;
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2; // 180mm
+  const marginLeft = 10;
+  const marginRight = 10;
+  const marginTop = 14;
+  const marginBottom = 12;
+  const colGap = 8;
+  const cardWidth = (pageWidth - marginLeft - marginRight - colGap) / 2; // 91mm
 
-  // 1. Kumpulkan urutan kategori dari master menu event
-  const knownCategories: string[] = [];
-  if (event.menuItems && Array.isArray(event.menuItems)) {
-    event.menuItems.forEach((m) => {
-      const cat = normalizeMenuCategory(m.category);
-      if (cat && !knownCategories.includes(cat)) {
-        knownCategories.push(cat);
-      }
-    });
-  }
+  let pageNum = 1;
 
-  // 2. Kelompokkan pesanan berdasarkan kategori sebenarnya dari menu item
-  // Map: categoryName -> Map of (menuItemId -> { name, totalQty, notes })
-  const categoryMap: Record<string, Record<string, { name: string; totalQty: number; notes: string[] }>> = {};
-
-  orders.forEach((order) => {
-    order.items.forEach((item) => {
-      // Cari data menu asli untuk mendapatkan kategori resmi
-      const foundMenuItem = event.menuItems?.find(
-        (m) => m.id === item.menuItemId || m.name.toLowerCase().trim() === item.menuItemName.toLowerCase().trim()
-      );
-
-      const category = normalizeMenuCategory(foundMenuItem?.category);
-
-      if (!categoryMap[category]) {
-        categoryMap[category] = {};
-        if (!knownCategories.includes(category)) {
-          knownCategories.push(category);
-        }
-      }
-
-      const catGroup = categoryMap[category];
-      if (!catGroup[item.menuItemId]) {
-        catGroup[item.menuItemId] = {
-          name: item.menuItemName,
-          totalQty: 0,
-          notes: [],
-        };
-      }
-
-      catGroup[item.menuItemId].totalQty += item.quantity;
-      if (item.notes && item.notes.trim()) {
-        const trimmedNote = item.notes.trim();
-        if (!catGroup[item.menuItemId].notes.includes(trimmedNote)) {
-          catGroup[item.menuItemId].notes.push(trimmedNote);
-        }
-      }
-    });
-  });
-
-  // Filter hanya kategori yang memiliki pesanan
-  const activeCategories = knownCategories.filter(
-    (cat) => categoryMap[cat] && Object.keys(categoryMap[cat]).length > 0
-  );
-
-  // Jika ada kategori lain di categoryMap yang belum masuk activeCategories
-  Object.keys(categoryMap).forEach((cat) => {
-    if (!activeCategories.includes(cat) && Object.keys(categoryMap[cat]).length > 0) {
-      activeCategories.push(cat);
-    }
-  });
-
-  // Hitung grand total seluruh pesanan
-  let grandTotalQty = 0;
-  activeCategories.forEach((cat) => {
-    const items = Object.values(categoryMap[cat]);
-    items.forEach((it) => {
-      grandTotalQty += it.totalQty;
-    });
-  });
-
-  // 3. Render Header Dokumen (Clean & Minimalist)
-  let currentY = 18;
-
-  // Header Title
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.setTextColor(15, 23, 42); // slate-900
-  doc.text('REKAP PESANAN MENU', margin, currentY);
-
-  // Subtitle / Label Kanan
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139); // slate-500
-  const dateStr = formatIndonesianDate(event.date);
-  doc.text(`${dateStr} • ${event.time} WIB`, pageWidth - margin, currentY, { align: 'right' });
-
-  currentY += 7;
-
-  // Informasi Acara & Restoran
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10.5);
-  doc.setTextColor(30, 41, 59); // slate-800
-  doc.text(event.restaurantName ? event.restaurantName.toUpperCase() : event.title, margin, currentY);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(71, 85, 105); // slate-600
-  const headerSub = event.title ? `Acara: ${event.title}` : '';
-  doc.text(headerSub, pageWidth - margin, currentY, { align: 'right' });
-
-  currentY += 4;
-
-  // Garis horizontal pembatas header yang elegan
-  doc.setDrawColor(226, 232, 240); // slate-200
-  doc.setLineWidth(0.5);
-  doc.line(margin, currentY, pageWidth - margin, currentY);
-
-  currentY += 6;
-
-  // 4. Render Tabel untuk Setiap Kategori Menu
-  if (activeCategories.length === 0) {
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(10);
-    doc.setTextColor(148, 163, 184);
-    doc.text('(Belum ada pesanan yang masuk)', margin, currentY + 10);
-  } else {
-    activeCategories.forEach((catName, catIdx) => {
-      const items = Object.values(categoryMap[catName]);
-      const catTotalQty = items.reduce((sum, it) => sum + it.totalQty, 0);
-
-      // Siapkan baris data tabel
-      const tableRows = items.map((item, idx) => {
-        let menuDisplay = item.name;
-        if (item.notes.length > 0) {
-          menuDisplay += '\n' + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
-        }
-        return [
-          idx + 1,
-          menuDisplay,
-          `${item.totalQty}`,
-        ];
-      });
-
-      // Cek apakah sisa halaman masih cukup untuk header + tabel (minimal ~40mm)
-      if (currentY > pageHeight - 45) {
-        doc.addPage();
-        currentY = 18;
-      }
-
-      // Title Kategori
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.setTextColor(15, 23, 42); // slate-900
-      doc.text(`${catIdx + 1}. ${catName.toUpperCase()}`, margin, currentY);
-
-      currentY += 2.5;
-
-      // Buat Tabel AutoTable
-      autoTable(doc, {
-        startY: currentY,
-        margin: { left: margin, right: margin },
-        tableWidth: contentWidth,
-        head: [['No', 'Nama Menu & Catatan', 'Jumlah']],
-        body: tableRows,
-        foot: [['', `Subtotal ${catName}`, `${catTotalQty}`]],
-        theme: 'plain',
-        headStyles: {
-          fillColor: [241, 245, 249], // slate-100 lembut
-          textColor: [51, 65, 85], // slate-700
-          fontStyle: 'bold',
-          fontSize: 8.5,
-          cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
-          lineColor: [203, 213, 225],
-          lineWidth: { bottom: 0.4 },
-        },
-        bodyStyles: {
-          fontSize: 9,
-          textColor: [30, 41, 59], // slate-800
-          cellPadding: { top: 3, bottom: 3, left: 3, right: 3 },
-          lineColor: [241, 245, 249],
-          lineWidth: { bottom: 0.3 },
-        },
-        footStyles: {
-          fillColor: [248, 250, 252], // slate-50
-          textColor: [71, 85, 105], // slate-600
-          fontStyle: 'bold',
-          fontSize: 9,
-          cellPadding: { top: 2.5, bottom: 2.5, left: 3, right: 3 },
-          lineColor: [226, 232, 240],
-          lineWidth: { top: 0.4 },
-        },
-        columnStyles: {
-          0: { cellWidth: 12, halign: 'center', valign: 'top' },
-          1: { cellWidth: contentWidth - 12 - 28, halign: 'left', valign: 'top' },
-          2: { cellWidth: 28, halign: 'center', valign: 'top', fontStyle: 'bold' },
-        },
-        didDrawCell: (data) => {
-          // Format kolom jumlah agar terlihat rapi dan elegan (kotak badge minimalis)
-          if (data.section === 'body' && data.column.index === 2) {
-            const rawVal = String(data.cell.raw || '');
-            const x = data.cell.x + 4;
-            const y = data.cell.y + 1.8;
-            const w = data.cell.width - 8;
-            const h = Math.min(data.cell.height - 3.6, 6.5);
-
-            // Kotak badge lembut
-            doc.setFillColor(241, 245, 249);
-            doc.setDrawColor(203, 213, 225);
-            doc.setLineWidth(0.25);
-            doc.roundedRect(x, y, w, h, 1, 1, 'FD');
-
-            // Teks jumlah tebal dan terpusat presisi
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(9);
-            doc.setTextColor(15, 23, 42);
-            doc.text(rawVal, data.cell.x + data.cell.width / 2, y + h / 2 + 1.2, {
-              align: 'center',
-            });
-          }
-        },
-      });
-
-      currentY = (doc as any).lastAutoTable.finalY + 8;
-    });
-
-    // 5. Ringkasan Grand Total di Bagian Bawah
-    if (currentY > pageHeight - 30) {
-      doc.addPage();
-      currentY = 18;
-    }
-
-    // Box Grand Total
-    const boxHeight = 14;
-    doc.setFillColor(248, 250, 252); // slate-50
-    doc.setDrawColor(15, 23, 42); // slate-900
-    doc.setLineWidth(0.5);
-    doc.roundedRect(margin, currentY, contentWidth, boxHeight, 1.5, 1.5, 'FD');
-
-    // Label Grand Total
+  const drawPageHeader = (pageNumber: number) => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(30, 41, 59);
-    doc.text('TOTAL KESELURUHAN PESANAN', margin + 5, currentY + 8.5);
+    doc.text((event.restaurantName || event.title).toUpperCase(), marginLeft, 8.5);
 
-    // Badge Angka Grand Total
-    const badgeW = 28;
-    const badgeH = 8.5;
-    const badgeX = margin + contentWidth - badgeW - 4;
-    const badgeY = currentY + 2.75;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    const dateStr = formatIndonesianDate(event.date) + (event.time ? ` pk ${event.time} WIB` : '');
+    doc.text(
+      `Kumpulan Struk Pemesan • ${dateStr} • Hal. ${pageNumber}`,
+      pageWidth - marginRight,
+      8.5,
+      { align: 'right' }
+    );
 
-    doc.setFillColor(15, 23, 42); // solid dark slate
-    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 1, 1, 'F');
+    // Separator line
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(marginLeft, 10.5, pageWidth - marginRight, 10.5);
+  };
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
-    doc.text(`${grandTotalQty} Porsi`, badgeX + badgeW / 2, badgeY + badgeH / 2 + 1.2, {
-      align: 'center',
+  // Draw initial page header
+  drawPageHeader(pageNum);
+
+  // Helper untuk mengukur tinggi struk nota tiap pesanan
+  const measureCardHeight = (order: UserOrder): number => {
+    let h = 5; // top padding
+    h += 4.5; // brand
+    h += 3.5; // dash
+    h += 3.5; // date
+    h += 3.5; // guest
+    h += 4.0; // double dash
+    order.items.forEach((it) => {
+      h += 3.6; // item name
+      if (it.notes && event.allowItemNotes !== false) {
+        h += 3.2; // notes
+      }
+      h += 4.0; // qty x price
     });
-  }
+    h += 3.5; // dash
+    h += 3.8; // subtotal
+    if (order.taxAmount > 0) h += 3.8;
+    if (order.serviceAmount > 0) h += 3.8;
+    if (order.roundingAmount !== 0) h += 3.8;
+    h += 4.0; // double dash
+    h += 4.0; // grand total
+    h += 3.5; // dash
+    if (order.isPaid) {
+      if (order.paymentMethod === 'cash') {
+        h += 3.8;
+        if (order.changeAmount && order.changeAmount > 0) h += 3.8;
+      } else {
+        h += 3.8 + 3.8;
+      }
+    } else {
+      h += 3.8;
+    }
+    h += 4.0; // dash
+    h += 4.0; // terima kasih
+    h += 5.0; // bottom padding
+    return Math.ceil(h);
+  };
 
-  // Simpan file
-  const cleanResto = (event.restaurantName || event.title || 'Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
-  const filename = `Rekap_Pesanan_${cleanResto}_${event.date}.pdf`;
+  let colY = [marginTop, marginTop];
+
+  orders.forEach((order) => {
+    const cardHeight = measureCardHeight(order);
+
+    // Tentukan kolom mana yang akan ditempati
+    let targetCol = colY[0] <= colY[1] ? 0 : 1;
+
+    // Jika kolom target tidak cukup tingginya di halaman ini
+    if (colY[targetCol] + cardHeight > pageHeight - marginBottom) {
+      const otherCol = 1 - targetCol;
+      if (colY[otherCol] + cardHeight <= pageHeight - marginBottom) {
+        targetCol = otherCol;
+      } else {
+        // Kedua kolom penuh, buat halaman baru
+        doc.addPage();
+        pageNum++;
+        drawPageHeader(pageNum);
+        colY = [marginTop, marginTop];
+        targetCol = 0;
+      }
+    }
+
+    const cardX = targetCol === 0 ? marginLeft : marginLeft + cardWidth + colGap;
+    const cardY = colY[targetCol];
+
+    // 1. Gambar kotak kartu struk (border dashed ala tiket/kupon gunting)
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineDashPattern([2, 1.5], 0);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 1.5, 1.5);
+    doc.setLineDashPattern([], 0);
+
+    // Indikator gunting di sudut kanan atas kartu
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(150, 150, 150);
+    doc.text('✂ potong', cardX + cardWidth - 3, cardY + 3.2, { align: 'right' });
+
+    // Helpers untuk menggambar garis putus-putus di dalam struk
+    const drawCardDashedLine = (currY: number) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineDashPattern([1.5, 1.2], 0);
+      doc.setLineWidth(0.2);
+      doc.line(cardX + 4, currY, cardX + cardWidth - 4, currY);
+      doc.setLineDashPattern([], 0);
+    };
+
+    const drawCardDoubleLine = (currY: number) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineDashPattern([1.5, 1.2], 0);
+      doc.setLineWidth(0.2);
+      doc.line(cardX + 4, currY - 0.4, cardX + cardWidth - 4, currY - 0.4);
+      doc.line(cardX + 4, currY + 0.4, cardX + cardWidth - 4, currY + 0.4);
+      doc.setLineDashPattern([], 0);
+    };
+
+    // 2. Render isi struk nota
+    let y = cardY + 5;
+
+    // Brand Name Restoran
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(0, 0, 0);
+    const brandText = (event.restaurantName || event.title || 'NOTA PESANAN').toUpperCase();
+    doc.text(brandText, cardX + cardWidth / 2, y, { align: 'center', maxWidth: cardWidth - 8 });
+    y += 4.5;
+
+    // Divider dash
+    drawCardDashedLine(y);
+    y += 3.5;
+
+    // Meta: Date & Guest
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`Date : ${event.date}${event.time ? ` ${event.time}` : ''}`, cardX + 4, y);
+    y += 3.5;
+
+    doc.setFont('courier', 'bold');
+    doc.text(`Guest: ${order.userName}`, cardX + 4, y);
+    y += 3.5;
+
+    // Double dashed divider
+    drawCardDoubleLine(y);
+    y += 4;
+
+    // Menu Items
+    order.items.forEach((it) => {
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(7.8);
+      doc.text(it.menuItemName, cardX + 4, y, { maxWidth: cardWidth - 8 });
+      y += 3.6;
+
+      if (it.notes && event.allowItemNotes !== false) {
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(6.8);
+        doc.setTextColor(60, 60, 60);
+        doc.text(`* ${it.notes}`, cardX + 6, y, { maxWidth: cardWidth - 12 });
+        doc.setTextColor(0, 0, 0);
+        y += 3.2;
+      }
+
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`  ${it.quantity} x @${it.price.toLocaleString('id-ID')}`, cardX + 4, y);
+      doc.text((it.quantity * it.price).toLocaleString('id-ID'), cardX + cardWidth - 4, y, { align: 'right' });
+      y += 4;
+    });
+
+    // Divider dash
+    drawCardDashedLine(y);
+    y += 3.5;
+
+    // Calculation Lines
+    const printCalcLine = (label: string, val: string, isBold: boolean = false, fontSize: number = 7.5) => {
+      doc.setFont('courier', isBold ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+      doc.text(label, cardX + 4, y);
+      doc.text(val, cardX + cardWidth - 4, y, { align: 'right' });
+      y += 3.8;
+    };
+
+    printCalcLine('Subtotal:', order.subtotal.toLocaleString('id-ID'));
+    if (order.taxAmount > 0) {
+      printCalcLine(`PB1 (${event.taxConfig.taxPercent}%):`, order.taxAmount.toLocaleString('id-ID'));
+    }
+    if (order.serviceAmount > 0) {
+      printCalcLine(`Service (${event.taxConfig.serviceChargePercent}%):`, order.serviceAmount.toLocaleString('id-ID'));
+    }
+    if (order.roundingAmount !== 0) {
+      printCalcLine(
+        'Pembulatan:',
+        order.roundingAmount > 0 ? `+${order.roundingAmount.toLocaleString('id-ID')}` : order.roundingAmount.toLocaleString('id-ID')
+      );
+    }
+
+    // Double dashed divider
+    drawCardDoubleLine(y);
+    y += 4;
+
+    // Grand Total
+    printCalcLine('Grand Total:', order.totalAmount.toLocaleString('id-ID'), true, 9);
+
+    // Divider dash
+    drawCardDashedLine(y);
+    y += 3.5;
+
+    // Payment Status
+    if (order.isPaid) {
+      if (order.paymentMethod === 'cash') {
+        printCalcLine('CASH', (order.paidAmount || order.totalAmount).toLocaleString('id-ID'), true, 7.5);
+        if (order.changeAmount && order.changeAmount > 0) {
+          printCalcLine('Cash Change:', order.changeAmount.toLocaleString('id-ID'), true, 7.5);
+        }
+      } else {
+        printCalcLine('TRANSFER / QRIS', order.totalAmount.toLocaleString('id-ID'), true, 7.5);
+        printCalcLine('Status:', 'LUNAS', true, 7.5);
+      }
+    } else {
+      printCalcLine('Status:', 'BELUM BAYAR', false, 7.5);
+    }
+
+    // Divider dash
+    drawCardDashedLine(y);
+    y += 4;
+
+    // Footer
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('*** TERIMA KASIH ***', cardX + cardWidth / 2, y, { align: 'center' });
+
+    // Update Y posisi kolom
+    colY[targetCol] = cardY + cardHeight + 6;
+  });
+
+  // Simpan file PDF
+  const cleanResto = (event.restaurantName || event.title || 'Struk_Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Struk_Pesanan_A4_${cleanResto}_${event.date}.pdf`;
   doc.save(filename);
 }
 
