@@ -55,6 +55,7 @@ import {
   exportToSlipOrderHalfA4Pdf,
   exportToPersonOrderHalfA4Pdf,
   exportCashChangePdf,
+  exportFullPaymentFinancialPdf,
   printIndividualThermalReceipt,
   printAllIndividualThermalReceipts,
   exportSingleOrderToReceiptPdf,
@@ -1284,6 +1285,31 @@ export default function EventAdminPage() {
 
                     <div className="h-px bg-slate-100 my-1" />
 
+                    {/* Opsi Rekap Pembayaran & Keuangan Lengkap (A4 Landscape) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        exportFullPaymentFinancialPdf(event, orders);
+                        setIsPdfDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 hover:bg-slate-50 transition flex items-start gap-2.5 group cursor-pointer bg-blue-50/50"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue-700 shadow-2xs transition">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <span>Rekap Pembayaran & Keuangan</span>
+                          <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[9px] font-extrabold rounded">A4 Landscape</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                          Laporan lengkap: pemesan, tagihan, status bayar (Cash/TF), uang diterima, kembalian, & rekap arus kas.
+                        </div>
+                      </div>
+                    </button>
+
+                    <div className="h-px bg-slate-100 my-1" />
+
                     {/* Opsi 3: Format Rekap Lengkap (Harga, Split Bill, Status Bayar) */}
                     <button
                       type="button"
@@ -1732,17 +1758,31 @@ export default function EventAdminPage() {
               </button>
             )}
 
-            {/* Tombol Cetak Seluruh Nota Karyawan */}
-            <button
-              type="button"
-              onClick={() => printAllIndividualThermalReceipts(event!, filteredOrders)}
-              disabled={filteredOrders.length === 0}
-              className="px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs disabled:opacity-40 sm:ml-auto shrink-0"
-              title="Cetak seluruh nota pemesan sekaligus dalam format struk thermal kasir"
-            >
-              <Printer className="w-3.5 h-3.5 text-orange-600" />
-              <span>Cetak Semua Nota</span>
-            </button>
+            <div className="flex items-center gap-2 sm:ml-auto shrink-0">
+              {/* Tombol Unduh PDF Rekap Pembayaran & Keuangan */}
+              <button
+                type="button"
+                onClick={() => exportFullPaymentFinancialPdf(event!, orders)}
+                disabled={orders.length === 0}
+                className="px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border border-blue-200 bg-blue-50/80 hover:bg-blue-100 text-blue-900 shadow-2xs disabled:opacity-40 shrink-0 cursor-pointer"
+                title="Unduh PDF Laporan Rekap Pembayaran & Keuangan Lengkap (A4 Landscape)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
+                <span>PDF Rekap Keuangan</span>
+              </button>
+
+              {/* Tombol Cetak Seluruh Nota Karyawan */}
+              <button
+                type="button"
+                onClick={() => printAllIndividualThermalReceipts(event!, filteredOrders)}
+                disabled={filteredOrders.length === 0}
+                className="px-3 py-1.5 rounded-xl font-bold text-xs transition flex items-center gap-1.5 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs disabled:opacity-40 shrink-0"
+                title="Cetak seluruh nota pemesan sekaligus dalam format struk thermal kasir"
+              >
+                <Printer className="w-3.5 h-3.5 text-orange-600" />
+                <span>Cetak Semua Nota</span>
+              </button>
+            </div>
           </div>
 
           {/* Card Rekap Uang Kembalian Tunai (Otomatis tampil jika ada rekan kantor yang membayar tunai lebih dan butuh kembalian) */}

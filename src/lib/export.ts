@@ -1969,3 +1969,342 @@ export function exportCashChangePdf(
   const filename = `Rekap_Kembalian_Tunai_${cleanResto}_${event.date}.pdf`;
   doc.save(filename);
 }
+
+/**
+ * Laporan Rekap Pembayaran & Keuangan Lengkap (A4 Landscape)
+ * Dokumen pertanggungjawaban PIC mencakup:
+ * - Header acara & resto
+ * - Kartu ringkasan finansial (Total tagihan, masuk, kembalian, piutang)
+ * - Tabel lengkap pemesan dengan rincian menu, tagihan, status bayar, metode, uang dibayar, kembalian, dan serah terima
+ * - Rekapitulasi arus kas & tanda tangan pengesahan PIC
+ */
+export function exportFullPaymentFinancialPdf(
+  event: EventData,
+  orders: UserOrder[]
+) {
+  if (!orders || orders.length === 0) {
+    alert('Belum ada pesanan untuk dicetak.');
+    return;
+  }
+
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = 297;
+  const pageHeight = 210;
+  const margin = 15;
+  const contentWidth = pageWidth - margin * 2; // 267 mm
+
+  // Header Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text('LAPORAN REKAP PEMBAYARAN & KEUANGAN', margin, 18);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139); // slate-500
+  const dateStr = formatIndonesianDate(event.date) + (event.time ? ` pk ${event.time} WIB` : '');
+  doc.text(dateStr, pageWidth - margin, 18, { align: 'right' });
+
+  // Subtitle Resto & PIC
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(30, 41, 59);
+  const restoTitle = (event.restaurantName || event.title).toUpperCase();
+  doc.text(restoTitle, margin, 24);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`PIC: ${event.picName || '-'} | Acara: ${event.title}`, pageWidth - margin, 24, { align: 'right' });
+
+  // Divider line
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(margin, 27, pageWidth - margin, 27);
+
+  // Financial calculations
+  const totalPortions = orders.reduce((sum, o) => sum + o.items.reduce((iSum, it) => iSum + it.quantity, 0), 0);
+  const totalCollectedBills = orders.reduce((sum, o) => sum + o.totalAmount, 0);
+  const paidOrders = orders.filter((o) => o.isPaid);
+  const paidCount = paidOrders.length;
+  const unpaidOrders = orders.filter((o) => !o.isPaid);
+  const unpaidCount = unpaidOrders.length;
+  const unpaidTotal = unpaidOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+  const transferOrders = paidOrders.filter((o) => o.paymentMethod !== 'cash');
+  const transferTotal = transferOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+  const cashOrders = paidOrders.filter((o) => o.paymentMethod === 'cash');
+  const cashCollectedTotal = cashOrders.reduce((sum, o) => sum + (o.paidAmount || o.totalAmount), 0);
+  const totalPaidMoney = transferTotal + cashCollectedTotal;
+
+  const ordersWithChange = orders.filter((o) => o.isPaid && o.paymentMethod === 'cash' && (o.changeAmount || 0) > 0);
+  const totalChangeAmount = ordersWithChange.reduce((sum, o) => sum + (o.changeAmount || 0), 0);
+  const returnedChangeCount = ordersWithChange.filter((o) => o.isChangeReturned).length;
+
+  // 4 Summary Stat Cards Banner
+  const cardY = 30;
+  const cardHeight = 15;
+  const cardGap = 3;
+  const cardWidth = (contentWidth - cardGap * 3) / 4; // ~64.5mm
+
+  const statCards = [
+    {
+      title: 'TOTAL TAGIHAN PEMESAN',
+      val: formatRupiah(totalCollectedBills),
+      sub: `${orders.length} Pemesan • ${totalPortions} Porsi`,
+      bg: [248, 250, 252],
+      border: [226, 232, 240],
+      valColor: [15, 23, 42],
+    },
+    {
+      title: 'TOTAL UANG DITERIMA',
+      val: formatRupiah(totalPaidMoney),
+      sub: `${paidCount} Lunas (${transferOrders.length} TF • ${cashOrders.length} Cash)`,
+      bg: [240, 253, 244],
+      border: [187, 247, 208],
+      valColor: [22, 101, 52],
+    },
+    {
+      title: 'TOTAL UANG KEMBALIAN',
+      val: formatRupiah(totalChangeAmount),
+      sub: `${ordersWithChange.length} Orang (${returnedChangeCount} Diserahkan)`,
+      bg: [254, 252, 232],
+      border: [254, 240, 138],
+      valColor: [180, 83, 9],
+    },
+    {
+      title: 'SISA BELUM BAYAR',
+      val: formatRupiah(unpaidTotal),
+      sub: unpaidCount > 0 ? `${unpaidCount} Orang Belum Lunas` : 'Semua Lunas 100%',
+      bg: unpaidCount > 0 ? [255, 241, 242] : [240, 253, 244],
+      border: unpaidCount > 0 ? [254, 205, 211] : [187, 247, 208],
+      valColor: unpaidCount > 0 ? [190, 18, 60] : [22, 101, 52],
+    },
+  ];
+
+  statCards.forEach((c, i) => {
+    const x = margin + i * (cardWidth + cardGap);
+    doc.setFillColor(c.bg[0], c.bg[1], c.bg[2]);
+    doc.setDrawColor(c.border[0], c.border[1], c.border[2]);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, cardY, cardWidth, cardHeight, 1.5, 1.5, 'FD');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(c.title, x + 3.5, cardY + 4.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(c.valColor[0], c.valColor[1], c.valColor[2]);
+    doc.text(c.val, x + 3.5, cardY + 9.5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(c.sub, x + 3.5, cardY + 13.2);
+  });
+
+  // Body Rows
+  const tableRows = orders.map((o, idx) => {
+    const menuSummary = o.items
+      .map((it) => `${it.quantity}x ${it.menuItemName}${it.notes ? ` (${it.notes})` : ''}`)
+      .join(', ');
+
+    const statusText = o.isPaid ? 'LUNAS' : 'BELUM';
+    const methodText = o.isPaid
+      ? (o.paymentMethod === 'cash' ? 'Cash' : 'Transfer')
+      : '-';
+
+    const receivedMoneyText = o.isPaid
+      ? formatRupiah(o.paidAmount || o.totalAmount)
+      : '-';
+
+    const changeMoneyText = o.isPaid && o.paymentMethod === 'cash'
+      ? ((o.changeAmount && o.changeAmount > 0) ? formatRupiah(o.changeAmount) : 'Uang Pas')
+      : '-';
+
+    let handoverText = '-';
+    if (o.isPaid && o.paymentMethod === 'cash') {
+      if (o.changeAmount && o.changeAmount > 0) {
+        handoverText = o.isChangeReturned ? '[ V ] Sudah' : '[   ] Belum';
+      } else {
+        handoverText = 'Uang Pas';
+      }
+    }
+
+    return [
+      idx + 1,
+      o.userName,
+      menuSummary,
+      formatRupiah(o.totalAmount),
+      statusText,
+      methodText,
+      receivedMoneyText,
+      changeMoneyText,
+      handoverText,
+    ];
+  });
+
+  autoTable(doc, {
+    startY: cardY + cardHeight + 4.5,
+    margin: { left: margin, right: margin },
+    tableWidth: contentWidth,
+    head: [[
+      'NO',
+      'NAMA PEMESAN',
+      'MENU DIPESAN',
+      'TAGIHAN',
+      'STATUS',
+      'METODE',
+      'DITERIMA',
+      'KEMBALIAN',
+      'SERAH KEMBALIAN',
+    ]],
+    body: tableRows,
+    foot: [[
+      { content: '', styles: { halign: 'center' } },
+      { content: 'TOTAL', styles: { halign: 'left', fontStyle: 'bold' } },
+      { content: `${totalPortions} Porsi (${orders.length} Pemesan)`, styles: { halign: 'left', fontStyle: 'bold' } },
+      { content: formatRupiah(totalCollectedBills), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: `${paidCount} Lunas • ${unpaidCount} Belum`, styles: { halign: 'center', fontStyle: 'bold', fontSize: 7 } },
+      { content: '', styles: { halign: 'center' } },
+      { content: formatRupiah(totalPaidMoney), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: formatRupiah(totalChangeAmount), styles: { halign: 'right', fontStyle: 'bold', textColor: [180, 83, 9] } },
+      { content: ordersWithChange.length > 0 ? `${returnedChangeCount}/${ordersWithChange.length} Selesai` : '-', styles: { halign: 'center', fontStyle: 'bold', fontSize: 7 } },
+    ]],
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 41, 59], // slate-800
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'center',
+      cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
+    },
+    bodyStyles: {
+      fontSize: 7.8,
+      textColor: [30, 41, 59],
+      cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: 'bold',
+      fontSize: 8,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+      lineColor: [203, 213, 225],
+      lineWidth: 0.3,
+    },
+    columnStyles: {
+      0: { cellWidth: 8, halign: 'center', fontStyle: 'bold' },
+      1: { cellWidth: 38, halign: 'left', fontStyle: 'bold' },
+      2: { cellWidth: 64, halign: 'left' },
+      3: { cellWidth: 27, halign: 'right', fontStyle: 'bold' },
+      4: { cellWidth: 25, halign: 'center' },
+      5: { cellWidth: 25, halign: 'center' },
+      6: { cellWidth: 28, halign: 'right' },
+      7: { cellWidth: 26, halign: 'right' },
+      8: { cellWidth: 26, halign: 'center' },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body') {
+        // Status column
+        if (data.column.index === 4) {
+          if (data.cell.text[0] === 'LUNAS') {
+            data.cell.styles.textColor = [22, 101, 52];
+            data.cell.styles.fontStyle = 'bold';
+          } else {
+            data.cell.styles.textColor = [190, 18, 60];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+        // Serah kembalian column
+        if (data.column.index === 8) {
+          if (data.cell.text[0]?.includes('Sudah')) {
+            data.cell.styles.textColor = [22, 101, 52];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (data.cell.text[0]?.includes('Belum')) {
+            data.cell.styles.textColor = [180, 83, 9];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      }
+    },
+  });
+
+  // Financial Reconciliation & Signature Box
+  let finalY = (doc as any).lastAutoTable.finalY + 6;
+  if (finalY + 36 > pageHeight - 12) {
+    doc.addPage();
+    finalY = 16;
+  }
+
+  const boxWidth = contentWidth * 0.58;
+  const sigWidth = contentWidth * 0.38;
+  const sigX = margin + contentWidth - sigWidth;
+
+  // Box Rekapitulasi Kas Acara
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(margin, finalY, boxWidth, 32, 1.5, 1.5, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(30, 41, 59);
+  doc.text('REKAPITULASI ARUS KAS & PERTANGGUNGJAWABAN ACARA', margin + 3.5, finalY + 5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(71, 85, 105);
+
+  const leftLabels = [
+    `• Total Tagihan Pemesan (Split Bill): ${formatRupiah(totalCollectedBills)}`,
+    `• Uang Masuk via Transfer/QRIS (${transferOrders.length} org): ${formatRupiah(transferTotal)}`,
+    `• Uang Masuk via Tunai/Cash (${cashOrders.length} org): ${formatRupiah(cashCollectedTotal)}`,
+  ];
+  const rightLabels = [
+    `• Uang Kembalian Tunai (${ordersWithChange.length} org): ${formatRupiah(totalChangeAmount)} (${returnedChangeCount} diserahkan)`,
+    `• Sisa Belum Bayar (Piutang): ${formatRupiah(unpaidTotal)} (${unpaidCount} org)`,
+    `• Pajak Resto: ${event.taxConfig.useTax ? `PPN ${event.taxConfig.taxPercent}%` : 'Tanpa PPN'} | Pembulatan: ${event.taxConfig.rounding || 'none'}`,
+  ];
+
+  leftLabels.forEach((txt, i) => {
+    doc.text(txt, margin + 4, finalY + 11 + i * 5);
+  });
+  rightLabels.forEach((txt, i) => {
+    doc.text(txt, margin + boxWidth / 2 + 2, finalY + 11 + i * 5);
+  });
+
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(6.8);
+  doc.setTextColor(148, 163, 184);
+  doc.text('* Seluruh data pembayaran dicatat & dihitung secara real-time via MakanKantor.', margin + 4, finalY + 28);
+
+  // Box Tanda Tangan PIC
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`Dicatat di Jakarta, ${formatIndonesianDate(event.date)}`, sigX + sigWidth / 2, finalY + 5, { align: 'center' });
+  doc.text('Penanggung Jawab Acara (PIC)', sigX + sigWidth / 2, finalY + 9.5, { align: 'center' });
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(`( ${event.picName || 'PIC Acara'} )`, sigX + sigWidth / 2, finalY + 28, { align: 'center' });
+
+  // Simpan File PDF
+  const cleanResto = (event.restaurantName || event.title || 'Laporan').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `Laporan_Keuangan_Pembayaran_${cleanResto}_${event.date}.pdf`;
+  doc.save(filename);
+}
+
