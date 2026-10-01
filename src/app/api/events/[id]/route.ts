@@ -25,11 +25,11 @@ export async function GET(
       );
     }
 
-    // Auto-normalisasi kategori menu yang belum standar (tanpa menyentuh atau menghapus data pesanan)
+    // Auto-normalisasi penulisan kategori menu (Title Case & trim tanpa mengubah data pesanan)
     let hasCategoryFix = false;
     if (event.menuItems && Array.isArray(event.menuItems)) {
       event.menuItems = event.menuItems.map((m) => {
-        const cleanCat = normalizeMenuCategory(m.category, m.name);
+        const cleanCat = normalizeMenuCategory(m.category);
         if (cleanCat !== m.category) {
           hasCategoryFix = true;
         }
@@ -103,7 +103,7 @@ export async function PATCH(
     if (menuItems && Array.isArray(menuItems)) {
       updatedEvent.menuItems = menuItems.map((m: any) => ({
         ...m,
-        category: normalizeMenuCategory(m.category, m.name),
+        category: normalizeMenuCategory(m.category),
       }));
     }
 

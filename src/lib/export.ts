@@ -386,7 +386,18 @@ export function isBeverageItem(menuItemId: string, menuName: string, menuItems: 
   const foundItem = menuItems.find(
     (m) => m.id === menuItemId || m.name.toLowerCase().trim() === (menuName || '').toLowerCase().trim()
   );
-  return normalizeMenuCategory(foundItem?.category, menuName || foundItem?.name) === 'Minuman';
+  if (foundItem?.category) {
+    return normalizeMenuCategory(foundItem.category) === 'Minuman';
+  }
+  const nameLower = (menuName || '').toLowerCase();
+  return (
+    nameLower.startsWith('es ') ||
+    nameLower.includes('teh') ||
+    nameLower.includes('kopi') ||
+    nameLower.includes('wedhang') ||
+    nameLower.includes('jus ') ||
+    nameLower.includes('mineral')
+  );
 }
 
 // Rekap PDF Format 1/2 A4 Landscape (210mm x 148.5mm / A5 Landscape, Kiri-Kanan)
@@ -409,7 +420,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   const knownCategories: string[] = [];
   if (event.menuItems && Array.isArray(event.menuItems)) {
     event.menuItems.forEach((m) => {
-      const cat = normalizeMenuCategory(m.category, m.name);
+      const cat = normalizeMenuCategory(m.category);
       if (cat && !knownCategories.includes(cat)) {
         knownCategories.push(cat);
       }
@@ -424,7 +435,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
         (m) => m.id === item.menuItemId || m.name.toLowerCase().trim() === item.menuItemName.toLowerCase().trim()
       );
 
-      const category = normalizeMenuCategory(foundMenuItem?.category, item.menuItemName);
+      const category = normalizeMenuCategory(foundMenuItem?.category);
 
       if (!categoryMap[category]) {
         categoryMap[category] = {};
@@ -678,7 +689,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
   const knownCategories: string[] = [];
   if (event.menuItems && Array.isArray(event.menuItems)) {
     event.menuItems.forEach((m) => {
-      const cat = normalizeMenuCategory(m.category, m.name);
+      const cat = normalizeMenuCategory(m.category);
       if (cat && !knownCategories.includes(cat)) {
         knownCategories.push(cat);
       }
@@ -696,7 +707,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
         (m) => m.id === item.menuItemId || m.name.toLowerCase().trim() === item.menuItemName.toLowerCase().trim()
       );
 
-      const category = normalizeMenuCategory(foundMenuItem?.category, item.menuItemName);
+      const category = normalizeMenuCategory(foundMenuItem?.category);
 
       if (!categoryMap[category]) {
         categoryMap[category] = {};

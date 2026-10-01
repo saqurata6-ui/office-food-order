@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
       allowItemNotes: effectiveAllowNotes,
       menuItems: (menuItems || []).map((m: any) => ({
         ...m,
-        category: normalizeMenuCategory(m.category, m.name),
+        category: normalizeMenuCategory(m.category),
       })),
       isLocked: false,
       createdAt: new Date().toISOString(),

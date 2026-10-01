@@ -134,123 +134,63 @@ export function formatIndonesianDate(dateStr: string): string {
   return dateStr;
 }
 
-export const STANDARD_CATEGORY_ORDER = ['Makanan', 'Minuman', 'Sate & Gorengan'];
+export const STANDARD_CATEGORY_ORDER = ['Makanan', 'Minuman', 'Sate & Gorengan', 'Gorengan', 'Sate', 'Snack', 'Cemilan', 'Dessert'];
 
 /**
- * Normalisasi kategori menu agar konsisten, rapi, dan terstandarisasi.
- * Menghilangkan duplikasi seperti "MAKANAN" vs "Makanan",
- * serta menggabungkan kategori sate, gorengan, dan lauk pelengkap menjadi "Sate & Gorengan".
+ * Normalisasi nama kategori menu agar konsisten & rapi (Title Case, trim whitespace, bersihkan duplikasi huruf besar/kecil).
+ * HANYA memproses string nama kategori (tidak pernah memaksakan atau menebak kategori berdasarkan nama item makanan).
  */
-export function normalizeMenuCategory(rawCategory?: string, itemName?: string): string {
+export function normalizeMenuCategory(rawCategory?: string, _itemName?: string): string {
   const cat = (rawCategory || '').trim();
-  const catLower = cat.toLowerCase();
-  const nameLower = (itemName || '').toLowerCase();
+  if (!cat) return 'Makanan';
 
-  // 1. Minuman (Wedhang, Teh, Kopi, Es, Jus, Air Mineral, dsb)
+  const catLower = cat.toLowerCase();
+
+  // Standarisasi kapitalisasi untuk kategori umum
   if (
-    catLower.includes('minum') ||
-    catLower.includes('drink') ||
-    catLower.includes('beverage') ||
-    catLower.includes('wedhang') ||
-    catLower.includes('kopi') ||
-    catLower.includes('teh') ||
-    catLower.includes('jus') ||
-    catLower.includes('juice') ||
-    catLower.includes('es ') ||
-    nameLower.startsWith('es ') ||
-    nameLower.includes('es teh') ||
-    nameLower.includes('es jeruk') ||
-    nameLower.includes('wedhang') ||
-    nameLower.includes('teh tawar') ||
-    nameLower.includes('teh manis') ||
-    nameLower.includes('kopi') ||
-    nameLower.includes('mineral') ||
-    nameLower.includes('kacang kuah') ||
-    nameLower.includes('ronde') ||
-    nameLower.includes('angsle') ||
-    nameLower.includes('jahe') ||
-    nameLower.includes('uwuh') ||
-    nameLower.includes('jus ') ||
-    nameLower.includes('jeruk nipis') ||
-    nameLower.includes('air mineral')
+    catLower === 'makanan' ||
+    catLower === 'makan' ||
+    catLower === 'food' ||
+    catLower === 'foods' ||
+    catLower === 'makanan utama' ||
+    catLower === 'main course'
+  ) {
+    return 'Makanan';
+  }
+
+  if (
+    catLower === 'minuman' ||
+    catLower === 'minum' ||
+    catLower === 'drink' ||
+    catLower === 'drinks' ||
+    catLower === 'beverage' ||
+    catLower === 'beverages'
   ) {
     return 'Minuman';
   }
 
-  // 2. Sate & Gorengan (Aneka Sate, Gorengan, Telur, Ceker, Jeroan, Kerupuk, Lauk Pendamping)
+  // Jika nama kategori di menu memang menyebutkan gabungan sate & gorengan
   if (
-    catLower.includes('sate') ||
-    catLower.includes('gorengan') ||
-    catLower.includes('side dish') ||
-    catLower.includes('pelengkap') ||
-    catLower.includes('lauk') ||
-    catLower.includes('aneka') ||
-    nameLower.includes('sate') ||
-    nameLower.includes('cecek') ||
-    nameLower.includes('rempelo') ||
-    nameLower.includes('ati') ||
-    nameLower.includes('usus') ||
-    nameLower.includes('paru') ||
-    nameLower.includes('kulit') ||
-    nameLower.includes('ceker') ||
-    nameLower.includes('telor') ||
-    nameLower.includes('telur') ||
-    nameLower.includes('puyuh') ||
-    nameLower.includes('dadar jagung') ||
-    nameLower.includes('perkedel') ||
-    nameLower.includes('mendoan') ||
-    nameLower.includes('ote - ote') ||
-    nameLower.includes('ote-ote') ||
-    nameLower.includes('ote ote') ||
-    nameLower.includes('tahu baso') ||
-    nameLower.includes('tahu bakso') ||
-    nameLower.includes('tahu goreng') ||
-    nameLower.includes('tempe mendoan') ||
-    nameLower.includes('tempe kering') ||
-    nameLower.includes('kerupuk') ||
-    nameLower.includes('krupuk') ||
-    nameLower.includes('emping') ||
-    nameLower.includes('peyek') ||
-    nameLower.includes('bakwan') ||
-    nameLower.includes('tahu petis')
+    catLower === 'sate & gorengan' ||
+    catLower === 'aneka sate & gorengan' ||
+    catLower === 'sate dan gorengan' ||
+    catLower === 'aneka sate dan gorengan'
   ) {
     return 'Sate & Gorengan';
   }
 
-  // 3. Makanan Utama (Soto, Nasi Pecel, Rawon, Mie, Ayam, Daging, Makanan)
-  if (
-    catLower.includes('makan') ||
-    catLower.includes('food') ||
-    catLower.includes('utama') ||
-    catLower.includes('soto') ||
-    catLower.includes('pecel') ||
-    catLower.includes('nasi') ||
-    catLower.includes('mie') ||
-    catLower.includes('rawon') ||
-    catLower.includes('ayam') ||
-    catLower.includes('daging') ||
-    nameLower.includes('soto') ||
-    nameLower.includes('pecel') ||
-    nameLower.includes('nasi') ||
-    nameLower.includes('rawon')
-  ) {
-    return 'Makanan';
-  }
-
-  // Fallback untuk "Lainnya" atau string kosong
-  if (catLower === 'lainnya' || !cat) {
-    return 'Makanan';
-  }
-
-  // Format Title Case jika kategori khusus lain (misal: "Paket", "A La Carte")
+  // Title Case untuk kategori apa pun (misal: "Dimsum", "Appetizer", "Snack", "Dessert", "Gorengan", "Sate", "Paket", dll)
   return cat
     .split(/\s+/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .map((w) => {
+      if (w === '&') return '&';
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
     .join(' ');
 }
 
 /**
- * Urutkan daftar nama kategori dengan prioritas: Makanan, Minuman, Sate & Gorengan, lalu lainnya secara alfabetis
+ * Urutkan daftar nama kategori dengan prioritas: Makanan, Minuman, Sate & Gorengan (jika ada), lalu lainnya secara alfabetis
  */
 export function sortCategories(categories: string[]): string[] {
   const result = [...categories];

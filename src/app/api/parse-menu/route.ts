@@ -280,17 +280,18 @@ Kembalikan SELURUH menu dalam format array JSON murni:
   {
     "name": "Nama Menu",
     "price": 12000,
-    "category": "Kategori terstandarisasi (Makanan, Minuman, atau Sate & Gorengan)",
+    "category": "Kategori sesuai judul atau header bagian di buku menu (contoh: Makanan, Minuman, Sate & Gorengan, Dimsum, Appetizer, Dessert, Snack, dll)",
     "description": "Keterangan / bahan / komposisi detail jika ada di buku menu (contoh: Nasi, Ayam, Telur Mata Sapi). Jika tidak ada, kosongkan (\"\")",
     "box_2d": [ymin, xmin, ymax, xmax]
   }
 ]
 
 Aturan ketat:
-1. 'category' harus dikelompokkan secara konsisten menggunakan Title Case:
-   - "Makanan" (untuk soto, nasi pecel, rawon, mie, olahan nasi/ayam/daging utama)
-   - "Minuman" (untuk wedhang, teh, kopi, es, jus, air mineral, dsb)
-   - "Sate & Gorengan" (untuk aneka sate seperti sate usus/cecek/paru/kulit/ati, aneka gorengan seperti dadar jagung, perkedel, mendoan, ote-ote, tahu baso, ceker, telur/telor, kerupuk, lauk pelengkap). Jangan memisahkan sate dan gorengan menjadi kategori berbeda!
+1. 'category' harus diekstrak sesuai judul atau header bagian/seksi yang tertera di dokumen/foto menu:
+   - Gunakan format Title Case yang rapi (contoh: "Makanan", "Minuman", "Sate & Gorengan", "Snack", "Dessert", dll).
+   - Jangan mengarang atau memaksakan kategori jika pada foto menu tidak ada judul atau seksi tersebut!
+   - Jika judul di foto menu tertulis "aneka SATE & GORENGAN", jadikan satu kategori "Sate & Gorengan".
+   - Jika foto menu tidak memiliki judul kategori sama sekali, kelompokkan secara wajar ke "Makanan" atau "Minuman".
 2. 'price' harus angka integer bulat murni dalam Rupiah tanpa titik/koma/simbol Rp (misal 12000, 2500, 50000). Jika tertulis 2.5 atau 2,5 dalam ribuan jadikan 2500. Jika tertulis 11 jadikan 11000.
 3. 'box_2d' adalah koordinat 2D bounding box area foto makanan/minuman tersebut dalam format normalized 0 sampai 1000 [ymin, xmin, ymax, xmax].
    - Jika terdapat foto hidangan untuk menu tersebut di foto dokumen, berikan kotak fotonya secara presisi.
@@ -326,7 +327,7 @@ Aturan ketat:
               id: `item_${nanoid(6)}`,
               name: String(it.name || 'Menu').trim(),
               price: Number(it.price) || 0,
-              category: normalizeMenuCategory(String(it.category || 'Makanan').trim(), String(it.name || '')),
+              category: normalizeMenuCategory(String(it.category || 'Makanan').trim()),
               description: it.description ? String(it.description).trim() : '',
               box_2d: Array.isArray(it.box_2d) && it.box_2d.length === 4
                 ? (it.box_2d.map(Number) as [number, number, number, number])
@@ -420,7 +421,7 @@ function parseTextMenu(text: string) {
         id: `item_${nanoid(6)}`,
         name,
         price: isNaN(price) ? 20000 : price,
-        category: normalizeMenuCategory(currentCategory, name),
+        category: normalizeMenuCategory(currentCategory),
         description: '',
       });
     } else {
@@ -432,7 +433,7 @@ function parseTextMenu(text: string) {
           id: `item_${nanoid(6)}`,
           name: name || line,
           price: parseInt(priceStr, 10) || 20000,
-          category: normalizeMenuCategory(currentCategory, name || line),
+          category: normalizeMenuCategory(currentCategory),
           description: '',
         });
       }

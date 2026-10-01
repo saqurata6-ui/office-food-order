@@ -84,7 +84,7 @@ export default function CreateEventPage() {
       id: `item_${nanoid(6)}`,
       name: newItemName.trim(),
       price,
-      category: normalizeMenuCategory(newItemCategory, newItemName.trim()),
+      category: normalizeMenuCategory(newItemCategory),
       description: newItemDesc.trim(),
       imageUrl: newItemImage.trim() || undefined,
     };
@@ -984,7 +984,7 @@ async function cropImageWithCanvas(file: File, box: [number, number, number, num
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-slate-900">{item.name}</span>
                           <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] shrink-0 font-medium">
-                            {normalizeMenuCategory(item.category, item.name)}
+                            {normalizeMenuCategory(item.category)}
                           </span>
                         </div>
                         {item.description && (

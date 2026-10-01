@@ -80,7 +80,7 @@ export default function OrderPage() {
             if (restored && Array.isArray(restored.menuItems)) {
               restored.menuItems = restored.menuItems.map((m: any) => ({
                 ...m,
-                category: normalizeMenuCategory(m.category, m.name),
+                category: normalizeMenuCategory(m.category),
               }));
             }
             await fetch('/api/events', {
@@ -104,7 +104,7 @@ export default function OrderPage() {
         if (eventData && Array.isArray(eventData.menuItems)) {
           eventData.menuItems = eventData.menuItems.map((m: any) => ({
             ...m,
-            category: normalizeMenuCategory(m.category, m.name),
+            category: normalizeMenuCategory(m.category),
           }));
         }
         setEvent(eventData);
@@ -173,11 +173,11 @@ export default function OrderPage() {
     setShowTaxEstimate(Boolean(event?.taxConfig?.useTax));
   };
 
-  // Categories list (Terstandarisasi: Makanan, Minuman, Sate & Gorengan)
+  // Categories list (Dinamis sesuai kategori menu pada acara)
   const categories = useMemo(() => {
     if (!event) return ['Semua'];
     const cats = new Set(
-      event.menuItems.map((it) => normalizeMenuCategory(it.category, it.name))
+      event.menuItems.map((it) => normalizeMenuCategory(it.category))
     );
     const sorted = sortCategories(Array.from(cats));
     return ['Semua', ...sorted];
@@ -188,7 +188,7 @@ export default function OrderPage() {
     if (!event) return [];
     if (activeCategory === 'Semua') return event.menuItems;
     return event.menuItems.filter(
-      (it) => normalizeMenuCategory(it.category, it.name) === activeCategory
+      (it) => normalizeMenuCategory(it.category) === activeCategory
     );
   }, [event, activeCategory]);
 
@@ -874,7 +874,7 @@ export default function OrderPage() {
                       </h3>
                       {item.category && (
                         <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
-                          {normalizeMenuCategory(item.category, item.name)}
+                          {normalizeMenuCategory(item.category)}
                         </span>
                       )}
                     </div>
