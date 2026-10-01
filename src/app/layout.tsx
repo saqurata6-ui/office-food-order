@@ -3,8 +3,16 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 
 export const metadata: Metadata = {
-  title: "MakanKantor - Web Pesanan Makan Kantor & Split Bill Otomatis",
+  title: "MakanKantor - Web Pesanan Makan",
   description: "Aplikasi koordinasi makan kantor: input menu manual/OCR AI gambar & PDF, share link pesanan, lock order, dan rekap split-bill otomatis.",
+  openGraph: {
+    title: "MakanKantor - Web Pesanan Makan",
+    description: "Aplikasi koordinasi makan kantor: input menu manual/OCR AI gambar & PDF, share link pesanan, lock order, dan rekap split-bill otomatis.",
+  },
+  twitter: {
+    title: "MakanKantor - Web Pesanan Makan",
+    description: "Aplikasi koordinasi makan kantor: input menu manual/OCR AI gambar & PDF, share link pesanan, lock order, dan rekap split-bill otomatis.",
+  },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -26,7 +34,7 @@ export default function RootLayout({
         <Navbar />
         <main className="flex-1 pb-16">{children}</main>
         <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
-          <p>© {new Date().getFullYear()} MakanKantor • Dibuat untuk memudahkan koordinasi makan-makan kantor.</p>
+          <p>© {new Date().getFullYear()} MakanKantor</p>
         </footer>
       </body>
     </html>
