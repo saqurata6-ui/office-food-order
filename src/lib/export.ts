@@ -1859,11 +1859,16 @@ export function exportCashChangePdf(
   doc.setLineWidth(0.3);
   doc.roundedRect(margin, bannerY, contentWidth, bannerHeight, 2, 2, 'FD');
 
+  const returnedCount = ordersWithChange.filter((o) => o.isChangeReturned).length;
+
   // Left text: Jumlah Rekan
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(30, 58, 138); // blue-900
-  doc.text(`Total Penerima Kembalian: ${ordersWithChange.length} Orang`, margin + 5, bannerY + 7);
+  const countLabel = returnedCount > 0
+    ? `Total Penerima Kembalian: ${ordersWithChange.length} Orang (${returnedCount} Diserahkan)`
+    : `Total Penerima Kembalian: ${ordersWithChange.length} Orang`;
+  doc.text(countLabel, margin + 5, bannerY + 7);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
@@ -1888,7 +1893,7 @@ export function exportCashChangePdf(
     formatRupiah(o.totalAmount),
     formatRupiah(o.paidAmount || 0),
     formatRupiah(o.changeAmount || 0),
-    '', // Kolom checklist / paraf tanda terima
+    o.isChangeReturned ? '[ V ] Sudah' : '[   ]',
   ]);
 
   const totalBill = ordersWithChange.reduce((acc, o) => acc + o.totalAmount, 0);
@@ -1908,12 +1913,12 @@ export function exportCashChangePdf(
     ]],
     body: tableRows,
     foot: [[
-      '',
-      'TOTAL',
-      formatRupiah(totalBill),
-      formatRupiah(totalPaid),
-      formatRupiah(totalChangeAmount),
-      '',
+      { content: '', styles: { halign: 'center' } },
+      { content: 'TOTAL', styles: { halign: 'left', fontStyle: 'bold' } },
+      { content: formatRupiah(totalBill), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: formatRupiah(totalPaid), styles: { halign: 'right', fontStyle: 'bold' } },
+      { content: formatRupiah(totalChangeAmount), styles: { halign: 'right', fontStyle: 'bold', textColor: [180, 83, 9] } },
+      { content: returnedCount > 0 ? `${returnedCount}/${ordersWithChange.length}` : '', styles: { halign: 'center', fontStyle: 'bold', fontSize: 7.5 } },
     ]],
     theme: 'grid',
     headStyles: {
@@ -1942,11 +1947,11 @@ export function exportCashChangePdf(
     },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center', fontStyle: 'bold' },
-      1: { cellWidth: 55, halign: 'left', fontStyle: 'bold' },
+      1: { cellWidth: 52, halign: 'left', fontStyle: 'bold' },
       2: { cellWidth: 32, halign: 'right' },
       3: { cellWidth: 32, halign: 'right' },
-      4: { cellWidth: 33, halign: 'right', fontStyle: 'bold', textColor: [180, 83, 9] },
-      5: { cellWidth: 18, halign: 'center' },
+      4: { cellWidth: 32, halign: 'right', fontStyle: 'bold', textColor: [180, 83, 9] },
+      5: { cellWidth: 22, halign: 'center' },
     },
   });
 

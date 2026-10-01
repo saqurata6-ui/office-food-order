@@ -70,6 +70,8 @@ export interface UserOrder {
   paymentMethod?: 'cash' | 'transfer';
   paidAmount?: number;
   changeAmount?: number;
+  isChangeReturned?: boolean;
+  changeReturnedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

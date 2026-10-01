@@ -299,6 +299,8 @@ export const db = {
             paymentMethod: d.payment_method || undefined,
             paidAmount: d.paid_amount != null ? Number(d.paid_amount) : undefined,
             changeAmount: d.change_amount != null ? Number(d.change_amount) : undefined,
+            isChangeReturned: Boolean(d.is_change_returned),
+            changeReturnedAt: d.change_returned_at || undefined,
             createdAt: d.created_at,
             updatedAt: d.updated_at,
           }));
@@ -359,6 +361,8 @@ export const db = {
           payment_method: orderToSave.paymentMethod || null,
           paid_amount: orderToSave.paidAmount ?? null,
           change_amount: orderToSave.changeAmount ?? null,
+          is_change_returned: orderToSave.isChangeReturned ?? false,
+          change_returned_at: orderToSave.changeReturnedAt ?? null,
         };
 
         let { error: upsertErr } = await supabase
@@ -407,6 +411,7 @@ export const db = {
       paymentMethod?: 'cash' | 'transfer';
       paidAmount?: number;
       changeAmount?: number;
+      isChangeReturned?: boolean;
     }
   ): Promise<boolean> {
     const cleanEventId = eventId.trim().toLowerCase();
@@ -415,6 +420,7 @@ export const db = {
     const paymentMethod = paymentDetails?.paymentMethod || (isPaid ? 'transfer' : undefined);
     const paidAmount = paymentDetails?.paidAmount;
     const changeAmount = paymentDetails?.changeAmount;
+    const isChangeReturned = isPaid ? (paymentDetails?.isChangeReturned ?? false) : false;
 
     if (supabase) {
       try {
@@ -427,6 +433,7 @@ export const db = {
           payment_method: isPaid ? paymentMethod : null,
           paid_amount: isPaid ? paidAmount : null,
           change_amount: isPaid ? changeAmount : null,
+          is_change_returned: isChangeReturned,
         };
 
         const { error: patchErr } = await supabase
@@ -451,6 +458,49 @@ export const db = {
         ord.paymentMethod = isPaid ? paymentMethod : undefined;
         ord.paidAmount = isPaid ? paidAmount : undefined;
         ord.changeAmount = isPaid ? changeAmount : undefined;
+        ord.isChangeReturned = isChangeReturned;
+        if (!isPaid) {
+          ord.changeReturnedAt = undefined;
+        }
+        ord.updatedAt = now;
+        saveDb(cache);
+        return true;
+      }
+    }
+
+    return true;
+  },
+
+  async updateOrderChangeStatus(
+    eventId: string,
+    orderId: string,
+    isChangeReturned: boolean
+  ): Promise<boolean> {
+    const cleanEventId = eventId.trim().toLowerCase();
+    const now = new Date().toISOString();
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('orders')
+          .update({
+            is_change_returned: isChangeReturned,
+            change_returned_at: isChangeReturned ? now : null,
+            updated_at: now,
+          })
+          .eq('id', orderId);
+      } catch (sbErr) {
+        console.error('Supabase updateOrderChangeStatus error:', sbErr);
+      }
+    }
+
+    const cache = getCache();
+    const list = cache.orders[cleanEventId] || cache.orders[eventId];
+    if (list) {
+      const ord = list.find((o) => o.id === orderId);
+      if (ord) {
+        ord.isChangeReturned = isChangeReturned;
+        ord.changeReturnedAt = isChangeReturned ? now : undefined;
         ord.updatedAt = now;
         saveDb(cache);
         return true;

@@ -136,7 +136,7 @@ export async function PATCH(
     const { id } = await context.params;
     const cleanId = decodeURIComponent(id || '').trim();
     const body = await req.json();
-    const { orderId, isPaid, action, paymentMethod, paidAmount, changeAmount } = body;
+    const { orderId, isPaid, action, paymentMethod, paidAmount, changeAmount, isChangeReturned } = body;
 
     if (!orderId) {
       return NextResponse.json({ success: false, message: 'Order ID dibutuhkan' }, { status: 400 });
@@ -157,12 +157,23 @@ export async function PATCH(
         paymentMethod: paymentMethod || undefined,
         paidAmount: paidAmount != null ? Number(paidAmount) : undefined,
         changeAmount: changeAmount != null ? Number(changeAmount) : undefined,
+        isChangeReturned: typeof isChangeReturned === 'boolean' ? isChangeReturned : undefined,
       });
       const currentOrders = await db.getOrders(cleanId);
       return NextResponse.json({
         success: updated,
         orders: currentOrders,
         message: 'Status pembayaran diperbarui',
+      });
+    }
+
+    if (typeof isChangeReturned === 'boolean') {
+      const updated = await db.updateOrderChangeStatus(cleanId, orderId, isChangeReturned);
+      const currentOrders = await db.getOrders(cleanId);
+      return NextResponse.json({
+        success: updated,
+        orders: currentOrders,
+        message: 'Status penyerahan uang kembalian diperbarui',
       });
     }
 

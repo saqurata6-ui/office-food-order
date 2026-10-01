@@ -107,6 +107,8 @@ export default function EventAdminPage() {
   const [paymentModalOrder, setPaymentModalOrder] = useState<UserOrder | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'transfer' | 'cash'>('cash');
   const [cashGivenAmount, setCashGivenAmount] = useState<string>('');
+  const [isModalChangeReturned, setIsModalChangeReturned] = useState<boolean>(false);
+  const [togglingChangeId, setTogglingChangeId] = useState<string | null>(null);
 
   // Tax Settings Modal state
   const [isTaxModalOpen, setIsTaxModalOpen] = useState(false);
@@ -282,11 +284,13 @@ export default function EventAdminPage() {
     setPaymentMethod(order.paymentMethod || 'cash');
     // Default cash amount to exact amount
     setCashGivenAmount(order.paidAmount ? order.paidAmount.toString() : order.totalAmount.toString());
+    setIsModalChangeReturned(Boolean(order.isChangeReturned));
   };
 
   const handleClosePaymentModal = () => {
     setPaymentModalOrder(null);
     setCashGivenAmount('');
+    setIsModalChangeReturned(false);
   };
 
   // Mark as unpaid
@@ -312,6 +316,8 @@ export default function EventAdminPage() {
                   paymentMethod: undefined,
                   paidAmount: undefined,
                   changeAmount: undefined,
+                  isChangeReturned: false,
+                  changeReturnedAt: undefined,
                 }
               : o
           )
@@ -346,6 +352,8 @@ export default function EventAdminPage() {
       changeVal = 0;
     }
 
+    const finalChangeReturned = changeVal > 0 ? isModalChangeReturned : false;
+
     try {
       const res = await fetch(`/api/events/${eventId}/orders`, {
         method: 'PATCH',
@@ -356,6 +364,7 @@ export default function EventAdminPage() {
           paymentMethod,
           paidAmount: paidVal,
           changeAmount: changeVal,
+          isChangeReturned: finalChangeReturned,
         }),
       });
 
@@ -370,6 +379,8 @@ export default function EventAdminPage() {
                   paymentMethod,
                   paidAmount: paidVal,
                   changeAmount: changeVal,
+                  isChangeReturned: finalChangeReturned,
+                  changeReturnedAt: finalChangeReturned ? new Date().toISOString() : undefined,
                 }
               : o
           )
@@ -381,6 +392,44 @@ export default function EventAdminPage() {
     } catch (err) {
       console.error(err);
       alert('Terjadi kesalahan koneksi.');
+    }
+  };
+
+  // Toggle checklist serah terima uang kembalian tunai
+  const handleToggleChangeReturned = async (order: UserOrder) => {
+    const nextStatus = !order.isChangeReturned;
+    setTogglingChangeId(order.id);
+    try {
+      const res = await fetch(`/api/events/${eventId}/orders`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          isChangeReturned: nextStatus,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === order.id
+              ? {
+                  ...o,
+                  isChangeReturned: nextStatus,
+                  changeReturnedAt: nextStatus ? new Date().toISOString() : undefined,
+                }
+              : o
+          )
+        );
+      } else {
+        alert(json.message || 'Gagal mengubah status kembalian.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan koneksi saat memperbarui status serah terima kembalian.');
+    } finally {
+      setTogglingChangeId(null);
     }
   };
 
@@ -707,6 +756,11 @@ export default function EventAdminPage() {
     return ordersWithChange.reduce((sum, o) => sum + (o.changeAmount || 0), 0);
   }, [ordersWithChange]);
 
+  // Jumlah karyawan yang sudah diserahkan uang kembaliannya
+  const returnedChangeCount = useMemo(() => {
+    return ordersWithChange.filter((o) => o.isChangeReturned).length;
+  }, [ordersWithChange]);
+
   // Filtered orders in split-bill tab
   const filteredOrders = useMemo(() => {
     let result = orders;
@@ -800,11 +854,12 @@ export default function EventAdminPage() {
     if (!event) return '';
     const listLines = ordersWithChange
       .map((o, idx) => {
-        return `${idx + 1}. *${o.userName}*: Kembali *${formatRupiah(o.changeAmount || 0)}* (Uang ${formatRupiah(o.paidAmount || 0)} - Tagihan ${formatRupiah(o.totalAmount)})`;
+        const statusBadge = o.isChangeReturned ? ' [✓ Sudah Diserahkan]' : ' [Belum Diserahkan]';
+        return `${idx + 1}. *${o.userName}*: Kembali *${formatRupiah(o.changeAmount || 0)}*${statusBadge} (Uang ${formatRupiah(o.paidAmount || 0)} - Tagihan ${formatRupiah(o.totalAmount)})`;
       })
       .join('\n');
 
-    return `💵 *REKAP UANG KEMBALIAN TUNAI* 💵\nAcara: *${event.title}* (${event.restaurantName})\nPIC: *${event.picName}*\n\nBerikut rincian uang kembalian rekan kantor:\n\n${listLines}\n\n*Total Kembalian Disiapkan:* *${formatRupiah(totalChangeAmount)}*\n(${ordersWithChange.length} orang)\n\nSilakan ambil kembalian ke PIC ya. Terima kasih! 🙏`;
+    return `💵 *REKAP UANG KEMBALIAN TUNAI* 💵\nAcara: *${event.title}* (${event.restaurantName})\nPIC: *${event.picName}*\n\nBerikut rincian uang kembalian rekan kantor:\n\n${listLines}\n\n*Total Kembalian Disiapkan:* *${formatRupiah(totalChangeAmount)}*\n(${ordersWithChange.length} orang • ${returnedChangeCount} sudah diserahkan)\n\nSilakan ambil kembalian ke PIC ya. Terima kasih! 🙏`;
   };
 
   const copyChangeSummaryToWhatsApp = () => {
@@ -1703,8 +1758,14 @@ export default function EventAdminPage() {
                       <h3 className="text-xs sm:text-sm font-extrabold text-blue-950">
                         Rekap Uang Kembalian Tunai
                       </h3>
-                      <span className="px-2 py-0.5 rounded-full bg-blue-200/80 text-blue-900 text-[10px] font-extrabold">
-                        {ordersWithChange.length} Rekan
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold transition ${
+                          returnedChangeCount === ordersWithChange.length
+                            ? 'bg-emerald-200 text-emerald-900 border border-emerald-300'
+                            : 'bg-blue-200/80 text-blue-900'
+                        }`}
+                      >
+                        {returnedChangeCount} / {ordersWithChange.length} Diserahkan
                       </span>
                     </div>
                     <p className="text-[11px] text-blue-700">
@@ -1748,27 +1809,75 @@ export default function EventAdminPage() {
                 </div>
               </div>
 
-              {/* Rincian Nama & Kembalian Karyawan */}
+              {/* Rincian Nama & Kembalian Karyawan dengan Checklist Serah Terima */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-0.5">
-                {ordersWithChange.map((o) => (
-                  <div
-                    key={o.id}
-                    className="p-2 rounded-xl bg-white/90 border border-blue-100 flex items-center justify-between text-xs hover:border-blue-300 transition shadow-2xs"
-                  >
-                    <div className="min-w-0 pr-2">
-                      <div className="font-bold text-slate-800 truncate">{o.userName}</div>
-                      <div className="text-[10px] text-slate-500">
-                        Uang {formatRupiah(o.paidAmount || 0)} • Tagihan {formatRupiah(o.totalAmount)}
+                {ordersWithChange.map((o) => {
+                  const isReturned = Boolean(o.isChangeReturned);
+                  const isPending = togglingChangeId === o.id;
+
+                  return (
+                    <div
+                      key={o.id}
+                      className={`p-2.5 rounded-xl border transition shadow-2xs flex items-center justify-between gap-2.5 ${
+                        isReturned
+                          ? 'bg-emerald-50/80 border-emerald-300/80 text-slate-800'
+                          : 'bg-white/95 border-blue-100 hover:border-blue-300'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleToggleChangeReturned(o)}
+                        disabled={isPending}
+                        className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer group flex-1"
+                        title={
+                          isReturned
+                            ? 'Kembalian sudah diserahkan. Klik untuk batalkan tanda.'
+                            : 'Klik untuk menandai kembalian sudah diserahkan ke rekan.'
+                        }
+                      >
+                        <div
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
+                            isReturned
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-2xs'
+                              : 'bg-white border-slate-300 group-hover:border-blue-500'
+                          } ${isPending ? 'opacity-50 animate-pulse' : ''}`}
+                        >
+                          {isReturned && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`font-bold truncate text-xs ${
+                                isReturned ? 'text-emerald-950 font-semibold' : 'text-slate-900'
+                              }`}
+                            >
+                              {o.userName}
+                            </span>
+                            {isReturned && (
+                              <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 shrink-0">
+                                Diserahkan ✓
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-500">
+                            Uang {formatRupiah(o.paidAmount || 0)} • Tagihan {formatRupiah(o.totalAmount)}
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="text-right shrink-0">
+                        <div className="text-[10px] text-slate-400 font-medium">Kembali</div>
+                        <div
+                          className={`text-xs font-black ${
+                            isReturned ? 'text-emerald-700' : 'text-amber-700'
+                          }`}
+                        >
+                          {formatRupiah(o.changeAmount || 0)}
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-[10px] text-slate-400 font-medium">Kembali</div>
-                      <div className="text-xs font-black text-amber-700">
-                        {formatRupiah(o.changeAmount || 0)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1868,9 +1977,24 @@ export default function EventAdminPage() {
                         )}
                         {order.isPaid && order.paymentMethod === 'cash' && (
                           <div className="text-emerald-700 font-medium">
-                            {order.changeAmount && order.changeAmount > 0
-                              ? `Uang: ${formatRupiah(order.paidAmount || 0)} (Kembali: ${formatRupiah(order.changeAmount)})`
-                              : `Uang Pas: ${formatRupiah(order.paidAmount || order.totalAmount)}`}
+                            {order.changeAmount && order.changeAmount > 0 ? (
+                              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                <span>Uang: {formatRupiah(order.paidAmount || 0)} (Kembali: {formatRupiah(order.changeAmount)})</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleChangeReturned(order)}
+                                  className={`px-1.5 py-0.2 rounded text-[10px] font-bold border transition ${
+                                    order.isChangeReturned
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                      : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                                  }`}
+                                >
+                                  {order.isChangeReturned ? '✓ Sudah Diserahkan' : 'Belum Diserahkan'}
+                                </button>
+                              </div>
+                            ) : (
+                              `Uang Pas: ${formatRupiah(order.paidAmount || order.totalAmount)}`
+                            )}
                           </div>
                         )}
                       </div>
@@ -2040,7 +2164,24 @@ export default function EventAdminPage() {
                             {order.isPaid && order.paymentMethod === 'cash' && (
                               <div className="text-[10px] text-emerald-700 font-medium">
                                 {order.changeAmount && order.changeAmount > 0 ? (
-                                  <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
+                                  <div className="flex items-center justify-center gap-1 mt-0.5">
+                                    <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleChangeReturned(order);
+                                      }}
+                                      title={order.isChangeReturned ? 'Klik untuk membatalkan tanda serah terima' : 'Klik untuk menandai kembalian sudah diserahkan'}
+                                      className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold border transition ${
+                                        order.isChangeReturned
+                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                          : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                                      }`}
+                                    >
+                                      {order.isChangeReturned ? '✓ Sudah' : 'Belum'}
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span>Uang Pas</span>
                                 )}
@@ -2519,11 +2660,24 @@ export default function EventAdminPage() {
                   const diff = parsed - paymentModalOrder.totalAmount;
                   if (diff > 0) {
                     return (
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
-                        <span className="text-emerald-800 font-semibold">Uang Kembalian:</span>
-                        <span className="text-base font-extrabold text-emerald-700">
-                          {formatRupiah(diff)}
-                        </span>
+                      <div className="space-y-2">
+                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+                          <span className="text-emerald-800 font-semibold">Uang Kembalian:</span>
+                          <span className="text-base font-extrabold text-emerald-700">
+                            {formatRupiah(diff)}
+                          </span>
+                        </div>
+                        <label className="flex items-center gap-2 px-1 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isModalChangeReturned}
+                            onChange={(e) => setIsModalChangeReturned(e.target.checked)}
+                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                          />
+                          <span className="text-xs font-semibold text-slate-700">
+                            Tandai uang kembalian sudah langsung diserahkan
+                          </span>
+                        </label>
                       </div>
                     );
                   } else if (diff === 0) {
