@@ -203,3 +203,144 @@ export function sortCategories(categories: string[]): string[] {
     return a.localeCompare(b);
   });
 }
+
+export type ItemUnitType = 'porsi' | 'gelas' | 'buah' | 'tusuk' | 'bungkus' | 'item';
+
+/**
+ * Mendapatkan satuan penyebutan menu secara pintar berdasarkan kategori dan nama menu
+ * Contoh:
+ * - Soto ayam kampung besar -> "porsi"
+ * - Teh tawar / Es jeruk -> "gelas"
+ * - Tempe mendoan / Telor ceplok / Tahu -> "buah"
+ * - Sate rempelo ati -> "tusuk"
+ * - Kerupuk -> "bungkus"
+ */
+export function getItemUnit(menuName?: string, category?: string): ItemUnitType {
+  const name = (menuName || '').toLowerCase().trim();
+  const cat = (category || '').toLowerCase().trim();
+
+  // Sate
+  if (cat.includes('sate') || name.startsWith('sate ') || name.includes(' sate ') || name.includes('tusuk')) {
+    return 'tusuk';
+  }
+
+  // Minuman
+  if (
+    cat.includes('minum') ||
+    cat.includes('drink') ||
+    cat.includes('beverage') ||
+    cat.includes('kopi') ||
+    cat.includes('teh') ||
+    cat.includes('jus') ||
+    name.startsWith('es ') ||
+    name.includes(' es ') ||
+    name.startsWith('teh ') ||
+    name.includes(' teh') ||
+    name.includes('kopi') ||
+    name.includes('jus ') ||
+    name.includes('wedhang') ||
+    name.includes('jeruk') ||
+    name.includes('lemon') ||
+    name.includes('air mineral') ||
+    name.includes('aqua') ||
+    name.includes('susu') ||
+    name.includes('latte') ||
+    name.includes('tea')
+  ) {
+    return 'gelas';
+  }
+
+  // Kerupuk
+  if (name.includes('kerupuk') || name.includes('krupuk') || name.includes('peyek') || name.includes('rempeyek')) {
+    return 'bungkus';
+  }
+
+  // Gorengan & Lauk Pendamping
+  if (
+    cat.includes('gorengan') ||
+    cat.includes('snack') ||
+    cat.includes('cemilan') ||
+    cat.includes('lauk') ||
+    cat.includes('side') ||
+    name.includes('tempe') ||
+    name.includes('tahu') ||
+    name.includes('mendoan') ||
+    name.includes('ote-ote') ||
+    name.includes('ote - ote') ||
+    name.includes('bakwan') ||
+    name.includes('perkedel') ||
+    name.includes('dadar jagung') ||
+    name.includes('telor') ||
+    name.includes('telur') ||
+    name.includes('ceplok') ||
+    name.includes('dadar') ||
+    name.includes('ceker') ||
+    name.includes('kepala') ||
+    name.includes('rempelo') ||
+    name.includes('ati') ||
+    name.includes('dimsum') ||
+    name.includes('siomay') ||
+    name.includes('risol') ||
+    name.includes('lumpia') ||
+    name.includes('pisang goreng')
+  ) {
+    return 'buah';
+  }
+
+  return 'porsi';
+}
+
+export function formatItemQtyWithUnit(qty: number, menuName?: string, category?: string): string {
+  const unit = getItemUnit(menuName, category);
+  return `${qty} ${unit}`;
+}
+
+export interface OrderSummaryBreakdown {
+  totalItems: number;
+  summaryText: string;
+  breakdownText: string;
+  mainCount: number;
+  drinkCount: number;
+  sideCount: number;
+}
+
+/**
+ * Format ringkasan jumlah item & rincian porsi/pendamping/minuman
+ * Contoh: Total 3 item (1 porsi makanan utama + 2 item pendamping/minuman)
+ */
+export function formatOrderSummaryBreakdown(
+  items: Array<{ menuItemName?: string; name?: string; quantity?: number; category?: string }>
+): OrderSummaryBreakdown {
+  let mainCount = 0;
+  let drinkCount = 0;
+  let sideCount = 0;
+  let totalItems = 0;
+
+  items.forEach((it) => {
+    const itemName = it.menuItemName || it.name || '';
+    const unit = getItemUnit(itemName, it.category);
+    const qty = it.quantity || 1;
+    totalItems += qty;
+    if (unit === 'porsi') mainCount += qty;
+    else if (unit === 'gelas') drinkCount += qty;
+    else sideCount += qty;
+  });
+
+  const parts: string[] = [];
+  if (mainCount > 0) parts.push(`${mainCount} porsi makanan utama`);
+  if (drinkCount > 0 && sideCount > 0) {
+    parts.push(`${drinkCount + sideCount} item pendamping/minuman`);
+  } else {
+    if (drinkCount > 0) parts.push(`${drinkCount} gelas minuman`);
+    if (sideCount > 0) parts.push(`${sideCount} item pendamping`);
+  }
+
+  return {
+    totalItems,
+    summaryText: `${totalItems} item`,
+    breakdownText: parts.join(' + ') || `${totalItems} item`,
+    mainCount,
+    drinkCount,
+    sideCount,
+  };
+}

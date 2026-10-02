@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { EventData, MenuItem, OrderItem, UserOrder, TaxConfig } from '@/types';
-import { formatRupiah, calculateOrder, normalizeName, formatIndonesianDate, normalizeMenuCategory, sortCategories } from '@/lib/calculator';
+import { formatRupiah, calculateOrder, normalizeName, formatIndonesianDate, normalizeMenuCategory, sortCategories, getItemUnit, formatItemQtyWithUnit, formatOrderSummaryBreakdown } from '@/lib/calculator';
 
 export default function OrderPage() {
   const params = useParams();
@@ -286,6 +286,15 @@ export default function OrderPage() {
   const totalItemCount = useMemo(() => {
     return orderItemsList.reduce((sum, it) => sum + it.quantity, 0);
   }, [orderItemsList]);
+
+  const orderSummaryBreakdown = useMemo(() => {
+    return formatOrderSummaryBreakdown(orderItemsList);
+  }, [orderItemsList]);
+
+  const previewBreakdown = useMemo(() => {
+    if (!previewOrder) return null;
+    return formatOrderSummaryBreakdown(previewOrder.items);
+  }, [previewOrder]);
 
   // Submit Order
   const handleSubmitOrder = async (e: React.FormEvent) => {
@@ -1034,9 +1043,9 @@ export default function OrderPage() {
           {/* Detailed breakdown expandable drawer */}
           {showBreakdown && totalItemCount > 0 && (
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs space-y-1.5 mb-2 animate-in slide-in-from-bottom duration-150">
-              <div className="font-bold text-slate-800 pb-1 border-b border-slate-200 flex justify-between">
+              <div className="font-bold text-slate-800 pb-1 border-b border-slate-200 flex justify-between items-center gap-2">
                 <span>Rincian Tagihan {userName ? `(${userName})` : ''}</span>
-                <span>{totalItemCount} porsi</span>
+                <span className="font-semibold text-slate-600 text-right">{orderSummaryBreakdown.summaryText} ({orderSummaryBreakdown.breakdownText})</span>
               </div>
 
               <div className="flex justify-between text-slate-600">
@@ -1084,7 +1093,7 @@ export default function OrderPage() {
             >
               <div>
                 <span className="block text-[11px] text-slate-500 font-medium">
-                  {totalItemCount} Menu Dipilih
+                  {orderSummaryBreakdown.summaryText} Dipilih
                 </span>
                 <div className="flex items-baseline gap-1.5 flex-wrap">
                   <span className="block text-base font-extrabold text-slate-900 leading-tight">
@@ -1197,7 +1206,9 @@ export default function OrderPage() {
             <div className="p-4 sm:p-5 overflow-y-auto space-y-3 flex-1">
               <div className="flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
                 <span>Daftar Menu</span>
-                <span>{previewOrder.items.reduce((s, i) => s + i.quantity, 0)} Porsi</span>
+                <span className="text-right normal-case font-semibold text-slate-600">
+                  {previewBreakdown ? `${previewBreakdown.summaryText} (${previewBreakdown.breakdownText})` : `${previewOrder.items.reduce((s, i) => s + i.quantity, 0)} item`}
+                </span>
               </div>
 
               <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-slate-50/50">
@@ -1207,6 +1218,9 @@ export default function OrderPage() {
                       <div className="font-bold text-slate-800 leading-snug">
                         <span className="text-orange-600 mr-1.5 font-extrabold">{it.quantity}x</span>
                         {it.menuItemName}
+                        <span className="ml-1.5 text-[11px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          {formatItemQtyWithUnit(it.quantity, it.menuItemName)}
+                        </span>
                       </div>
                       {it.notes && allowItemNotes && (
                         <p className="text-[11px] text-slate-500 italic mt-0.5">

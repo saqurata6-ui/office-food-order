@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { EventData, UserOrder, MenuItem } from '@/types';
-import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories } from './calculator';
+import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories, getItemUnit, formatItemQtyWithUnit, formatOrderSummaryBreakdown } from './calculator';
 
 export function getGroupedRestaurantOrders(
   orders: UserOrder[],
@@ -83,18 +83,18 @@ export function exportToExcel(event: EventData, orders: UserOrder[]) {
     [`Tempat: ${event.restaurantName} (${event.restaurantAddress})`],
     [`Waktu: ${event.date} - ${event.time}`],
     [],
-    ['No', 'Nama Menu', 'Jumlah Porsi', 'Harga Satuan', 'Subtotal', 'Catatan Khusus'],
+    ['No', 'Nama Menu', 'Jumlah / Satuan', 'Harga Satuan', 'Subtotal', 'Catatan Khusus'],
     ...grouped.map((item, idx) => [
       idx + 1,
       item.name,
-      item.totalQty,
+      formatItemQtyWithUnit(item.totalQty, item.name),
       item.price,
       item.totalQty * item.price,
       item.notes.join('; ') || '-',
     ]),
     [],
     [
-      'TOTAL PORSI',
+      'TOTAL ITEM',
       grouped.reduce((sum, it) => sum + it.totalQty, 0),
       '',
       'TOTAL BIAYA',
@@ -116,7 +116,7 @@ export function exportToExcel(event: EventData, orders: UserOrder[]) {
     ...orders.map((order, idx) => [
       idx + 1,
       order.userName,
-      order.items.map((it) => `${it.quantity}x ${it.menuItemName}${it.notes ? ` (${it.notes})` : ''}`).join(', '),
+      order.items.map((it) => `${formatItemQtyWithUnit(it.quantity, it.menuItemName)} ${it.menuItemName}${it.notes ? ` (${it.notes})` : ''}`).join(', '),
       order.subtotal,
       order.taxAmount,
       order.roundingAmount,
@@ -167,7 +167,7 @@ export function exportToPdf(event: EventData, orders: UserOrder[]) {
   const restoRows = grouped.map((item, idx) => [
     idx + 1,
     item.name,
-    `${item.totalQty} porsi`,
+    formatItemQtyWithUnit(item.totalQty, item.name),
     formatRupiah(item.price),
     formatRupiah(item.totalQty * item.price),
     item.notes.join('\n') || '-',
@@ -179,7 +179,7 @@ export function exportToPdf(event: EventData, orders: UserOrder[]) {
   restoRows.push([
     '',
     'TOTAL',
-    `${totalPorsi} porsi`,
+    `${totalPorsi} item`,
     '',
     formatRupiah(totalBiayaResto),
     '',
@@ -664,7 +664,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(255, 255, 255);
-  doc.text(`${grandTotalQty} Porsi`, badgeX + badgeW / 2, badgeY + badgeH / 2 + 1, {
+  doc.text(`${grandTotalQty} Item`, badgeX + badgeW / 2, badgeY + badgeH / 2 + 1, {
     align: 'center',
   });
 
@@ -743,6 +743,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
       h += 4.0; // qty x price
     });
     h += 3.5; // dash
+    h += 3.8; // total item
     h += 3.8; // subtotal
     if (order.taxAmount > 0) h += 3.8;
     if (order.serviceAmount > 0) h += 3.8;
@@ -870,7 +871,7 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
 
       doc.setFont('courier', 'normal');
       doc.setFontSize(7.5);
-      doc.text(`  ${it.quantity} x @${it.price.toLocaleString('id-ID')}`, cardX + 4, y);
+      doc.text(`  ${formatItemQtyWithUnit(it.quantity, it.menuItemName)} x @${it.price.toLocaleString('id-ID')}`, cardX + 4, y);
       doc.text((it.quantity * it.price).toLocaleString('id-ID'), cardX + cardWidth - 4, y, { align: 'right' });
       y += 4;
     });
@@ -888,6 +889,8 @@ export function exportToCategoryPdf(event: EventData, orders: UserOrder[]) {
       y += 3.8;
     };
 
+    const orderBreakdown = formatOrderSummaryBreakdown(order.items);
+    printCalcLine('Total Item:', `${orderBreakdown.summaryText}`, false, 7.2);
     printCalcLine('Subtotal:', order.subtotal.toLocaleString('id-ID'));
     if (order.taxAmount > 0) {
       printCalcLine(`PB1 (${event.taxConfig.taxPercent}%):`, order.taxAmount.toLocaleString('id-ID'));
@@ -1238,7 +1241,7 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(0, 0, 0);
-  doc.text(`TOTAL: ${grandTotalQty} PORSI`, pageWidth - margin, footerY + 2, { align: 'right' });
+  doc.text(`TOTAL: ${grandTotalQty} ITEM`, pageWidth - margin, footerY + 2, { align: 'right' });
 
   // Simpan file
   const cleanResto = (event.restaurantName || event.title || 'Slip_Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
@@ -1276,7 +1279,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
   const getOrderEstimatedHeight = (order: UserOrder): number => {
     let lines = 0;
     order.items.forEach((it) => {
-      const nameLen = `${it.quantity}x ${it.menuItemName}`.length;
+      const nameLen = `${formatItemQtyWithUnit(it.quantity, it.menuItemName)} ${it.menuItemName}`.length;
       lines += Math.max(1, Math.ceil(nameLen / 34));
       if (it.notes && it.notes.trim()) {
         const noteLen = `* Catatan: ${it.notes.trim()}`.length;
@@ -1369,7 +1372,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
       const { order, originalIndex } = ent;
       const itemsText = order.items
         .map((it) => {
-          let str = `${it.quantity}x ${it.menuItemName}`;
+          let str = `${formatItemQtyWithUnit(it.quantity, it.menuItemName)} ${it.menuItemName}`;
           if (it.notes && it.notes.trim()) {
             str += `\n   * Catatan: ${it.notes.trim()}`;
           }
@@ -1434,11 +1437,11 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
           const maxW = cell.width - cell.padding('left') - cell.padding('right');
 
           ent.order.items.forEach((it) => {
-            // Nama Menu & Qty: Bold, Hitam/Dark Slate, tinggi baris pas dan proporsional
+            // Nama Menu & Qty: Bold, Hitam/Dark Slate, dengan satuan cerdas (porsi/gelas/buah)
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.2);
             doc.setTextColor(30, 41, 59);
-            const mainText = `${it.quantity}x ${it.menuItemName}`;
+            const mainText = `${formatItemQtyWithUnit(it.quantity, it.menuItemName)} ${it.menuItemName}`;
             const mainLines = doc.splitTextToSize(mainText, maxW);
             doc.text(mainLines, startXPos, textY);
             textY += mainLines.length * 3.3;
@@ -1458,6 +1461,11 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
       },
     });
   };
+
+  // Hitung ringkasan global makanan, minuman, pendamping
+  const globalBreakdown = formatOrderSummaryBreakdown(
+    orders.flatMap((o) => o.items.map((it) => ({ menuItemName: it.menuItemName, quantity: it.quantity })))
+  );
 
   // Render Setiap Halaman
   pages.forEach((pg, pageIdx) => {
@@ -1506,7 +1514,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(30, 41, 59);
-    const footerRight = `TOTAL: ${orders.length} PEMESAN • ${totalPortions} PORSI${totalPages > 1 ? ` (${pageIdx + 1}/${totalPages})` : ''}`;
+    const footerRight = `TOTAL: ${orders.length} PEMESAN • ${totalPortions} ITEM (${globalBreakdown.breakdownText})${totalPages > 1 ? ` (${pageIdx + 1}/${totalPages})` : ''}`;
     doc.text(footerRight, pageWidth - margin, footerY + 4, { align: 'right' });
   });
 
@@ -2237,7 +2245,7 @@ export function exportFullPaymentFinancialPdf(
     {
       title: 'TOTAL TAGIHAN PEMESAN',
       val: formatRupiah(totalCollectedBills),
-      sub: `${orders.length} Pemesan • ${totalPortions} Porsi`,
+      sub: `${orders.length} Pemesan • ${totalPortions} Item`,
       bg: [248, 250, 252],
       border: [226, 232, 240],
       valColor: [15, 23, 42],
@@ -2359,7 +2367,7 @@ export function exportFullPaymentFinancialPdf(
     foot: [[
       { content: '', styles: { halign: 'center' } },
       { content: 'TOTAL', styles: { halign: 'left', fontStyle: 'bold' } },
-      { content: `${totalPortions} Porsi (${orders.length} Pemesan)`, styles: { halign: 'left', fontStyle: 'bold' } },
+      { content: `${totalPortions} Item (${orders.length} Pemesan)`, styles: { halign: 'left', fontStyle: 'bold' } },
       { content: formatRupiah(totalCollectedBills), styles: { halign: 'right', fontStyle: 'bold' } },
       { content: `${paidCount} Lunas • ${unpaidCount} Belum`, styles: { halign: 'center', fontStyle: 'bold', fontSize: 7 } },
       { content: '', styles: { halign: 'center' } },

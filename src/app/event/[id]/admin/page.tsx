@@ -46,7 +46,7 @@ import {
   Receipt,
 } from 'lucide-react';
 import { EventData, UserOrder, MenuItem, TaxConfig, RoundingType } from '@/types';
-import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories } from '@/lib/calculator';
+import { formatRupiah, formatIndonesianDate, normalizeMenuCategory, sortCategories, getItemUnit, formatItemQtyWithUnit, formatOrderSummaryBreakdown } from '@/lib/calculator';
 import {
   exportToExcel,
   exportToPdf,
@@ -737,6 +737,12 @@ export default function EventAdminPage() {
     return groupedOrders.reduce((sum, it) => sum + it.totalQty, 0);
   }, [groupedOrders]);
 
+  const globalSummaryBreakdown = useMemo(() => {
+    return formatOrderSummaryBreakdown(
+      groupedOrders.map((it) => ({ menuItemName: it.name, quantity: it.totalQty }))
+    );
+  }, [groupedOrders]);
+
   const totalRestoBill = useMemo(() => {
     return groupedOrders.reduce((sum, it) => sum + it.totalQty * it.price, 0);
   }, [groupedOrders]);
@@ -1413,11 +1419,13 @@ export default function EventAdminPage() {
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Total Porsi Menu</span>
+            <span>Total Item Dipesan</span>
             <Utensils className="w-4 h-4 text-orange-500" />
           </div>
-          <p className="text-2xl font-extrabold text-slate-900">{totalPortions} <span className="text-xs font-normal text-slate-500">porsi</span></p>
-          <p className="text-[11px] text-slate-500">Dari {groupedOrders.length} jenis menu</p>
+          <p className="text-2xl font-extrabold text-slate-900">{totalPortions} <span className="text-xs font-normal text-slate-500">item</span></p>
+          <p className="text-[11px] text-slate-500 truncate" title={globalSummaryBreakdown.breakdownText}>
+            {globalSummaryBreakdown.breakdownText}
+          </p>
         </div>
 
         <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-sm space-y-1">
@@ -1541,13 +1549,13 @@ export default function EventAdminPage() {
                 >
                   <option value="first_added">Waktu Masuk Pertama (Awal Pesan)</option>
                   <option value="latest_added">Waktu Tambah Terbaru</option>
-                  <option value="qty_desc">Porsi Terbanyak (Best Seller)</option>
+                  <option value="qty_desc">Jumlah Terbanyak (Best Seller)</option>
                   <option value="name_asc">Nama Menu (A - Z)</option>
                 </select>
               </div>
 
               <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-3 py-1.5 rounded-xl shrink-0">
-                Total {totalPortions} Porsi
+                Total {totalPortions} Item
               </span>
             </div>
           </div>
@@ -1579,7 +1587,7 @@ export default function EventAdminPage() {
 
                       <div className="text-right shrink-0">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 font-extrabold text-xs">
-                          {item.totalQty} porsi
+                          {formatItemQtyWithUnit(item.totalQty, item.name)}
                         </span>
                         <p className="text-xs font-extrabold text-slate-900 mt-1">
                           {formatRupiah(item.totalQty * item.price)}
@@ -1607,7 +1615,7 @@ export default function EventAdminPage() {
                   <div className="p-3.5 rounded-xl bg-orange-50/70 border border-orange-200 flex items-center justify-between text-xs">
                     <div>
                       <span className="text-slate-600 block text-[11px]">Total Pesanan:</span>
-                      <span className="font-extrabold text-orange-800 text-sm">{totalPortions} Porsi</span>
+                      <span className="font-extrabold text-orange-800 text-sm">{totalPortions} Item</span>
                     </div>
                     <div className="text-right">
                       <span className="text-slate-600 block text-[11px]">Total Tagihan Resto:</span>
@@ -1624,7 +1632,7 @@ export default function EventAdminPage() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
                       <th className="py-3 px-4 w-12 text-center">No</th>
                       <th className="py-3 px-4">Nama Menu</th>
-                      <th className="py-3 px-4 text-center">Jumlah Porsi</th>
+                      <th className="py-3 px-4 text-center">Jumlah / Satuan</th>
                       <th className="py-3 px-4 text-right">Harga Satuan</th>
                       <th className="py-3 px-4 text-right">Subtotal</th>
                       <th className="py-3 px-4">Catatan Khusus dari Pemesan</th>
@@ -1637,7 +1645,7 @@ export default function EventAdminPage() {
                         <td className="py-3 px-4 font-bold text-slate-900 text-sm">{item.name}</td>
                         <td className="py-3 px-4 text-center">
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-orange-100 text-orange-800 font-extrabold text-xs">
-                            {item.totalQty} porsi
+                            {formatItemQtyWithUnit(item.totalQty, item.name)}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-right text-slate-600">{formatRupiah(item.price)}</td>
@@ -1662,8 +1670,8 @@ export default function EventAdminPage() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold text-slate-900">
-                      <td colSpan={2} className="py-3 px-4 text-right">TOTAL PORSI:</td>
-                      <td className="py-3 px-4 text-center text-orange-600 text-sm">{totalPortions} Porsi</td>
+                      <td colSpan={2} className="py-3 px-4 text-right">TOTAL ITEM:</td>
+                      <td className="py-3 px-4 text-center text-orange-600 text-sm">{totalPortions} Item</td>
                       <td className="py-3 px-4 text-right">TOTAL:</td>
                       <td className="py-3 px-4 text-right text-sm text-slate-900">{formatRupiah(totalRestoBill)}</td>
                       <td></td>
@@ -2717,7 +2725,7 @@ export default function EventAdminPage() {
                     </span>
                   </div>
                   <span className="text-[11px] text-orange-700 bg-orange-100 px-2.5 py-1 rounded-lg font-bold">
-                    {paymentModalOrder.items.reduce((sum, it) => sum + it.quantity, 0)} Porsi
+                    {formatOrderSummaryBreakdown(paymentModalOrder.items).summaryText}
                   </span>
                 </div>
               );
@@ -3261,7 +3269,7 @@ export default function EventAdminPage() {
                         </div>
                       )}
                       <div className="flex justify-between pl-2 text-[11px]">
-                        <span>{it.quantity} x @{it.price.toLocaleString('id-ID')}</span>
+                        <span>{formatItemQtyWithUnit(it.quantity, it.menuItemName)} x @{it.price.toLocaleString('id-ID')}</span>
                         <span>{(it.quantity * it.price).toLocaleString('id-ID')}</span>
                       </div>
                     </div>
@@ -3270,8 +3278,12 @@ export default function EventAdminPage() {
 
                 <div className="border-t border-dashed border-black my-1" />
 
-                {/* Subtotal & PB1 */}
+                {/* Subtotal, Total Item & PB1 */}
                 <div className="space-y-0.5 text-[11px]">
+                  <div className="flex justify-between">
+                    <span>Total Item:</span>
+                    <span>{formatOrderSummaryBreakdown(selectedReceiptOrder.items).summaryText}</span>
+                  </div>
                   <div className="flex justify-between">
                     <span>Subtotal:</span>
                     <span>{selectedReceiptOrder.subtotal.toLocaleString('id-ID')}</span>
