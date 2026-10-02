@@ -1270,16 +1270,20 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
     });
   });
 
-  // Estimasi tinggi setiap baris pesanan agar tidak terpotong antar halaman
+  // Estimasi tinggi setiap baris pesanan secara akurat
   const getOrderEstimatedHeight = (order: UserOrder): number => {
     let lines = 0;
     order.items.forEach((it) => {
-      lines += 1;
+      const nameLen = `${it.quantity}x ${it.menuItemName}`.length;
+      const nameLines = Math.max(1, Math.ceil(nameLen / 34));
+      lines += nameLines;
       if (it.notes && it.notes.trim()) {
-        lines += 1;
+        const noteLen = `* Catatan: ${it.notes.trim()}`.length;
+        const noteLines = Math.max(1, Math.ceil(noteLen / 38));
+        lines += noteLines;
       }
     });
-    return Math.max(lines, 1) * 3.2 + 2.6;
+    return Math.max(lines, 1) * 3.0 + 4.2;
   };
 
   interface OrderEntry {
@@ -1294,55 +1298,66 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
     height: getOrderEstimatedHeight(o),
   }));
 
-  // Kelompokkan pesanan ke halaman-halaman (kapasitas per kolom max 118mm)
-  const pages: Array<{ left: OrderEntry[]; right: OrderEntry[] }> = [];
+  // Batas aman tinggi kolom (mm) agar autoTable tidak pernah memecah baris antar halaman
+  const MAX_COL_HEIGHT = 100;
 
-  let currentLeft: OrderEntry[] = [];
-  let currentRight: OrderEntry[] = [];
-  let currentLeftH = 0;
-  let currentRightH = 0;
+  // Algoritma pembagian sekuensial 2 kolom per halaman (tanpa melompat ganjil-genap)
+  const findBestSplit = (slice: OrderEntry[]) => {
+    let bestSplit = -1;
+    let minDiff = Infinity;
+    let bestLeftH = 0;
+    let bestRightH = 0;
 
-  entries.forEach((entry) => {
-    if (currentLeftH + entry.height <= 118) {
-      currentLeft.push(entry);
-      currentLeftH += entry.height;
-    } else if (currentRightH + entry.height <= 118) {
-      currentRight.push(entry);
-      currentRightH += entry.height;
-    } else {
-      pages.push({ left: currentLeft, right: currentRight });
-      currentLeft = [entry];
-      currentRight = [];
-      currentLeftH = entry.height;
-      currentRightH = 0;
-    }
-  });
+    for (let m = 1; m <= slice.length; m++) {
+      const leftPart = slice.slice(0, m);
+      const rightPart = slice.slice(m);
+      const leftH = leftPart.reduce((s, e) => s + e.height, 0);
+      const rightH = rightPart.reduce((s, e) => s + e.height, 0);
 
-  if (currentLeft.length > 0 || currentRight.length > 0) {
-    pages.push({ left: currentLeft, right: currentRight });
-  }
-
-  // Seimbangkan kolom kiri dan kanan di setiap halaman
-  pages.forEach((pg) => {
-    const allOnPage = [...pg.left, ...pg.right];
-    const balancedLeft: OrderEntry[] = [];
-    const balancedRight: OrderEntry[] = [];
-    let lH = 0;
-    let rH = 0;
-
-    allOnPage.forEach((ent) => {
-      if (lH <= rH) {
-        balancedLeft.push(ent);
-        lH += ent.height;
-      } else {
-        balancedRight.push(ent);
-        rH += ent.height;
+      if (leftH <= MAX_COL_HEIGHT && rightH <= MAX_COL_HEIGHT) {
+        const diff = Math.abs(leftH - rightH);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestSplit = m;
+          bestLeftH = leftH;
+          bestRightH = rightH;
+        }
       }
-    });
+    }
 
-    pg.left = balancedLeft;
-    pg.right = balancedRight;
-  });
+    return { split: bestSplit, leftH: bestLeftH, rightH: bestRightH };
+  };
+
+  const pages: Array<{ left: OrderEntry[]; right: OrderEntry[] }> = [];
+  let cursor = 0;
+
+  while (cursor < entries.length) {
+    let count = 1;
+
+    while (cursor + count <= entries.length) {
+      const candidate = entries.slice(cursor, cursor + count);
+      const result = findBestSplit(candidate);
+      if (result.split !== -1) {
+        count++;
+      } else {
+        break;
+      }
+    }
+
+    const actualCount = count - 1;
+    if (actualCount <= 0) {
+      const single = entries[cursor];
+      pages.push({ left: [single], right: [] });
+      cursor++;
+    } else {
+      const chosenSlice = entries.slice(cursor, cursor + actualCount);
+      const { split } = findBestSplit(chosenSlice);
+      const left = chosenSlice.slice(0, split);
+      const right = chosenSlice.slice(split);
+      pages.push({ left, right });
+      cursor += actualCount;
+    }
+  }
 
   const totalPages = Math.max(1, pages.length);
 
@@ -1372,7 +1387,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
 
     autoTable(doc, {
       startY: 13.5,
-      margin: { left: startX, right: pageWidth - startX - colWidth, bottom: 9 },
+      margin: { left: startX, right: pageWidth - startX - colWidth, bottom: 8 },
       tableWidth: colWidth,
       head: [[
         'NO',
@@ -1389,19 +1404,19 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
         fontStyle: 'bold',
         fontSize: 7.2,
         halign: 'center',
-        cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 },
+        cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
       },
       bodyStyles: {
         fontSize: 7.2,
         textColor: [30, 41, 59],
         lineColor: [203, 213, 225],
         lineWidth: 0.2,
-        cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 },
+        cellPadding: { top: 2.0, bottom: 2.0, left: 1.8, right: 1.8 },
       },
       columnStyles: {
         0: { cellWidth: 7, halign: 'center', fontStyle: 'bold', valign: 'top' },
-        1: { cellWidth: 25, halign: 'left', fontStyle: 'bold', valign: 'top' },
-        2: { cellWidth: colWidth - 7 - 25 - 8, halign: 'left', valign: 'top' },
+        1: { cellWidth: 26, halign: 'left', fontStyle: 'bold', valign: 'top' },
+        2: { cellWidth: colWidth - 7 - 26 - 8, halign: 'left', valign: 'top' },
         3: { cellWidth: 8, halign: 'center', fontStyle: 'normal', valign: 'middle' },
       },
       willDrawCell: (data) => {
@@ -1415,32 +1430,28 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
           if (!ent) return;
           const cell = data.cell;
           const startXPos = cell.x + cell.padding('left');
-          let textY = cell.y + cell.padding('top') + 2.4;
+          let textY = cell.y + cell.padding('top') + 2.0;
           const maxW = cell.width - cell.padding('left') - cell.padding('right');
 
-          ent.order.items.forEach((it, idx) => {
+          ent.order.items.forEach((it) => {
             // Nama Menu & Qty: Bold, Hitam/Dark Slate
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7.2);
+            doc.setFontSize(7.0);
             doc.setTextColor(30, 41, 59);
             const mainText = `${it.quantity}x ${it.menuItemName}`;
             const mainLines = doc.splitTextToSize(mainText, maxW);
             doc.text(mainLines, startXPos, textY);
-            textY += mainLines.length * 2.8;
+            textY += mainLines.length * 2.7;
 
             // Catatan: Miring (Italic), Lebih Kecil, Muted Slate
             if (it.notes && it.notes.trim()) {
               doc.setFont('helvetica', 'italic');
-              doc.setFontSize(6.2);
+              doc.setFontSize(6.0);
               doc.setTextColor(100, 116, 139);
               const noteText = `* Catatan: ${it.notes.trim()}`;
               const noteLines = doc.splitTextToSize(noteText, maxW - 2);
               doc.text(noteLines, startXPos + 1.5, textY);
-              textY += noteLines.length * 2.5;
-            }
-
-            if (idx < ent.order.items.length - 1) {
-              textY += 0.8;
+              textY += noteLines.length * 2.4;
             }
           });
         }
