@@ -963,87 +963,116 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
   const colGap = 6;
   const colWidth = (contentWidth - colGap) / 2; // 94mm
 
-  // 1. Kumpulkan data pesanan yang masuk
-  const orderQtyMap: Record<string, number> = {};
-  const orderNotesMap: Record<string, string[]> = {};
+  // 1. Kumpulkan data pesanan yang masuk, dikelompokkan per item dan per variasi catatan
+  interface VarData {
+    baseKey: string;
+    menuItemId: string;
+    name: string;
+    note: string; // trimmed original note
+    qty: number;
+  }
+  const varMap = new Map<string, VarData>();
   let grandTotalQty = 0;
 
   orders.forEach((order) => {
     order.items.forEach((item) => {
-      const key = item.menuItemId || item.menuItemName.toLowerCase().trim();
-      orderQtyMap[key] = (orderQtyMap[key] || 0) + item.quantity;
+      const trimmedNote = (item.notes || '').trim();
+      const baseKey = item.menuItemId || item.menuItemName.toLowerCase().trim();
+      const varKey = `${baseKey}:::${trimmedNote.toLowerCase()}`;
+
       grandTotalQty += item.quantity;
 
-      if (item.notes && item.notes.trim()) {
-        if (!orderNotesMap[key]) orderNotesMap[key] = [];
-        const n = item.notes.trim();
-        if (!orderNotesMap[key].includes(n)) {
-          orderNotesMap[key].push(n);
-        }
+      const existing = varMap.get(varKey);
+      if (existing) {
+        existing.qty += item.quantity;
+      } else {
+        varMap.set(varKey, {
+          baseKey,
+          menuItemId: item.menuItemId,
+          name: item.menuItemName,
+          note: trimmedNote,
+          qty: item.quantity,
+        });
       }
     });
   });
 
-  // 2. Kumpulkan master kategori & menu yang dipesan (qty > 0)
-  const categoryGroups: Record<string, Array<{ id: string; name: string; qty: number; notes: string[] }>> = {};
+  // 2. Kumpulkan master kategori & menu yang dipesan (qty > 0) dibagi per catatan
+  interface SlipItem {
+    id: string;
+    name: string;
+    note: string;
+    qty: number;
+    category: string;
+  }
+  const categoryGroups: Record<string, SlipItem[]> = {};
   const knownCategories: string[] = [];
+
+  const addCategoryItem = (cat: string, item: SlipItem) => {
+    if (!categoryGroups[cat]) {
+      categoryGroups[cat] = [];
+      knownCategories.push(cat);
+    }
+    categoryGroups[cat].push(item);
+  };
+
+  const processedVarKeys = new Set<string>();
 
   // Ambil dari master menu event jika ada
   if (event.menuItems && Array.isArray(event.menuItems) && event.menuItems.length > 0) {
     event.menuItems.forEach((m) => {
       const keyById = m.id;
       const keyByName = m.name.toLowerCase().trim();
-      const qty = orderQtyMap[keyById] || orderQtyMap[keyByName] || 0;
-      const notes = orderNotesMap[keyById] || orderNotesMap[keyByName] || [];
+      const cat = normalizeMenuCategory(m.category);
 
-      // Hanya masukkan jika menu ini dipilih/dipesan oleh peserta (qty > 0)
-      if (qty > 0) {
-        let cat = normalizeMenuCategory(m.category);
-        if (!categoryGroups[cat]) {
-          categoryGroups[cat] = [];
-          knownCategories.push(cat);
+      // Cari semua variasi (tanpa catatan & dengan catatan) yang cocok dengan menu ini
+      const matchedVars: VarData[] = [];
+      varMap.forEach((v, vKey) => {
+        if (
+          !processedVarKeys.has(vKey) &&
+          (v.baseKey === keyById || v.baseKey === keyByName || v.name.toLowerCase().trim() === keyByName)
+        ) {
+          matchedVars.push(v);
+          processedVarKeys.add(vKey);
         }
-        categoryGroups[cat].push({
+      });
+
+      if (matchedVars.length === 0) return;
+
+      // Urutkan variasi: tanpa catatan di urutan pertama, lalu dengan catatan alfabetis
+      matchedVars.sort((a, b) => {
+        if (!a.note && b.note) return -1;
+        if (a.note && !b.note) return 1;
+        return a.note.localeCompare(b.note);
+      });
+
+      matchedVars.forEach((v) => {
+        addCategoryItem(cat, {
           id: m.id,
           name: m.name,
-          qty,
-          notes,
+          note: v.note,
+          qty: v.qty,
+          category: cat,
         });
-      }
+      });
     });
   }
 
   // Tambahkan item dari orders yang mungkin belum ada di master menu
-  orders.forEach((order) => {
-    order.items.forEach((item) => {
-      const keyById = item.menuItemId;
-      const keyByName = item.menuItemName.toLowerCase().trim();
-      const qty = orderQtyMap[keyById] || orderQtyMap[keyByName] || item.quantity;
-
-      if (qty <= 0) return;
-
-      let alreadyExists = false;
-      Object.values(categoryGroups).forEach((list) => {
-        if (list.some((it) => it.id === keyById || it.name.toLowerCase().trim() === keyByName)) {
-          alreadyExists = true;
-        }
+  varMap.forEach((v, vKey) => {
+    if (!processedVarKeys.has(vKey)) {
+      processedVarKeys.add(vKey);
+      const cat = normalizeMenuCategory(
+        isBeverageItem(v.menuItemId, v.name, event.menuItems || []) ? 'Minuman' : 'Makanan'
+      );
+      addCategoryItem(cat, {
+        id: v.menuItemId,
+        name: v.name,
+        note: v.note,
+        qty: v.qty,
+        category: cat,
       });
-
-      if (!alreadyExists) {
-        let cat = isBeverageItem(item.menuItemId, item.menuItemName, event.menuItems || []) ? 'Minuman' : 'Makanan';
-        cat = normalizeMenuCategory(cat);
-        if (!categoryGroups[cat]) {
-          categoryGroups[cat] = [];
-          knownCategories.push(cat);
-        }
-        categoryGroups[cat].push({
-          id: item.menuItemId,
-          name: item.menuItemName,
-          qty,
-          notes: orderNotesMap[keyById] || orderNotesMap[keyByName] || [],
-        });
-      }
-    });
+    }
   });
 
   // Hanya daftarkan kategori yang memiliki item pesanan (qty > 0)
@@ -1112,8 +1141,8 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
 
       const rows = items.map((it, idx) => {
         let menuDisplay = it.name;
-        if (it.notes.length > 0) {
-          menuDisplay += '\n' + it.notes.map((n) => `* ${n}`).join('\n');
+        if (it.note) {
+          menuDisplay += `\n* Catatan: ${it.note}`;
         }
         return [
           idx + 1,
@@ -1153,6 +1182,36 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
           0: { cellWidth: 8, halign: 'center', fontStyle: 'bold', valign: 'middle' },
           1: { cellWidth: colWidth - 8 - 16, halign: 'left', valign: 'middle' },
           2: { cellWidth: 16, halign: 'center', fontStyle: 'bold', valign: 'middle' },
+        },
+        willDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 1) {
+            data.cell.text = [];
+          }
+        },
+        didDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 1) {
+            const it = items[data.row.index];
+            if (!it) return;
+            const cell = data.cell;
+            const startXPos = cell.x + cell.padding('left');
+            let textY = cell.y + cell.padding('top') + 2.4;
+            const maxW = cell.width - cell.padding('left') - cell.padding('right');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.setTextColor(0, 0, 0);
+            const titleLines = doc.splitTextToSize(it.name, maxW);
+            doc.text(titleLines, startXPos, textY);
+            textY += titleLines.length * 2.8;
+
+            if (it.note) {
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(6.4);
+              doc.setTextColor(75, 85, 99);
+              const noteLines = doc.splitTextToSize(`* Catatan: ${it.note}`, maxW - 1.5);
+              doc.text(noteLines, startXPos + 1.2, textY);
+            }
+          }
         },
       });
 
@@ -1344,6 +1403,47 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
         1: { cellWidth: 25, halign: 'left', fontStyle: 'bold', valign: 'top' },
         2: { cellWidth: colWidth - 7 - 25 - 8, halign: 'left', valign: 'top' },
         3: { cellWidth: 8, halign: 'center', fontStyle: 'normal', valign: 'middle' },
+      },
+      willDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 2) {
+          data.cell.text = [];
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 2) {
+          const ent = list[data.row.index];
+          if (!ent) return;
+          const cell = data.cell;
+          const startXPos = cell.x + cell.padding('left');
+          let textY = cell.y + cell.padding('top') + 2.4;
+          const maxW = cell.width - cell.padding('left') - cell.padding('right');
+
+          ent.order.items.forEach((it, idx) => {
+            // Nama Menu & Qty: Bold, Hitam/Dark Slate
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.2);
+            doc.setTextColor(30, 41, 59);
+            const mainText = `${it.quantity}x ${it.menuItemName}`;
+            const mainLines = doc.splitTextToSize(mainText, maxW);
+            doc.text(mainLines, startXPos, textY);
+            textY += mainLines.length * 2.8;
+
+            // Catatan: Miring (Italic), Lebih Kecil, Muted Slate
+            if (it.notes && it.notes.trim()) {
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(6.2);
+              doc.setTextColor(100, 116, 139);
+              const noteText = `* Catatan: ${it.notes.trim()}`;
+              const noteLines = doc.splitTextToSize(noteText, maxW - 2);
+              doc.text(noteLines, startXPos + 1.5, textY);
+              textY += noteLines.length * 2.5;
+            }
+
+            if (idx < ent.order.items.length - 1) {
+              textY += 0.8;
+            }
+          });
+        }
       },
     });
   };
