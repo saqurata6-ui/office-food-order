@@ -561,7 +561,7 @@ export function exportToLandscapeHalfA4Pdf(event: EventData, orders: UserOrder[]
       const tableRows = items.map((item) => {
         let text = item.name;
         if (item.notes.length > 0) {
-          text += '\n' + item.notes.map((n) => `↳ Catatan: ${n}`).join('\n');
+          text += '\n' + item.notes.map((n) => `* Catatan: ${n}`).join('\n');
         }
         return [text, `${item.totalQty}`];
       });
@@ -1113,7 +1113,7 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
       const rows = items.map((it, idx) => {
         let menuDisplay = it.name;
         if (it.notes.length > 0) {
-          menuDisplay += '\n' + it.notes.map((n) => `↳ ${n}`).join('\n');
+          menuDisplay += '\n' + it.notes.map((n) => `* ${n}`).join('\n');
         }
         return [
           idx + 1,
@@ -1187,8 +1187,8 @@ export function exportToSlipOrderHalfA4Pdf(event: EventData, orders: UserOrder[]
   doc.save(filename);
 }
 
-// Rekap PDF Format Distribusi per Orang (1/2 A4 Landscape: 210mm x 148.5mm, 2 Kolom Sejajar)
-// Menampilkan siapa yang memesan dan pesanan apa saja (tanpa harga), ideal untuk pembagian makanan kantor
+// Rekap PDF Format Distribusi per Orang (1/2 A4 Landscape: 210mm x 148.5mm, 2 Kolom Sejajar Per Halaman)
+// Menampilkan siapa yang memesan dan pesanan apa saja (tanpa harga), ideal untuk checklist pembagian makanan kantor
 export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder[]) {
   const doc = new jsPDF({
     orientation: 'landscape',
@@ -1198,10 +1198,10 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
 
   const pageWidth = 210;
   const pageHeight = 148.5;
-  const margin = 8;
-  const contentWidth = pageWidth - margin * 2; // 194mm
-  const colGap = 6;
-  const colWidth = (contentWidth - colGap) / 2; // 94mm
+  const margin = 7;
+  const contentWidth = pageWidth - margin * 2; // 196mm
+  const colGap = 5;
+  const colWidth = (contentWidth - colGap) / 2; // 95.5mm
 
   // Hitung total porsi keseluruhan
   let totalPortions = 0;
@@ -1211,57 +1211,93 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
     });
   });
 
-  // Bagi daftar order menjadi 2 kolom (Kiri dan Kanan) seimbang berdasarkan perkiraan jumlah baris
-  const leftOrders: Array<{ order: UserOrder; originalIndex: number }> = [];
-  const rightOrders: Array<{ order: UserOrder; originalIndex: number }> = [];
+  // Estimasi tinggi setiap baris pesanan agar tidak terpotong antar halaman
+  const getOrderEstimatedHeight = (order: UserOrder): number => {
+    let lines = 0;
+    order.items.forEach((it) => {
+      lines += 1;
+      if (it.notes && it.notes.trim()) {
+        lines += 1;
+      }
+    });
+    return Math.max(lines, 1) * 3.2 + 2.6;
+  };
 
-  let leftWeight = 0;
-  let rightWeight = 0;
+  interface OrderEntry {
+    order: UserOrder;
+    originalIndex: number;
+    height: number;
+  }
 
-  orders.forEach((order, idx) => {
-    const weight = Math.max(order.items.length, 1);
-    if (leftWeight <= rightWeight) {
-      leftOrders.push({ order, originalIndex: idx + 1 });
-      leftWeight += weight;
+  const entries: OrderEntry[] = orders.map((o, idx) => ({
+    order: o,
+    originalIndex: idx + 1,
+    height: getOrderEstimatedHeight(o),
+  }));
+
+  // Kelompokkan pesanan ke halaman-halaman (kapasitas per kolom max 118mm)
+  const pages: Array<{ left: OrderEntry[]; right: OrderEntry[] }> = [];
+
+  let currentLeft: OrderEntry[] = [];
+  let currentRight: OrderEntry[] = [];
+  let currentLeftH = 0;
+  let currentRightH = 0;
+
+  entries.forEach((entry) => {
+    if (currentLeftH + entry.height <= 118) {
+      currentLeft.push(entry);
+      currentLeftH += entry.height;
+    } else if (currentRightH + entry.height <= 118) {
+      currentRight.push(entry);
+      currentRightH += entry.height;
     } else {
-      rightOrders.push({ order, originalIndex: idx + 1 });
-      rightWeight += weight;
+      pages.push({ left: currentLeft, right: currentRight });
+      currentLeft = [entry];
+      currentRight = [];
+      currentLeftH = entry.height;
+      currentRightH = 0;
     }
   });
 
-  // 1. Header Atas
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(0, 0, 0);
-  const titleText = `DISTRIBUSI PESANAN • ${(event.restaurantName || event.title).toUpperCase()}`;
-  doc.text(titleText, margin, 9);
+  if (currentLeft.length > 0 || currentRight.length > 0) {
+    pages.push({ left: currentLeft, right: currentRight });
+  }
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(80, 80, 80);
-  doc.text(`${formatIndonesianDate(event.date)} pk ${event.time} WIB`, pageWidth - margin, 9, { align: 'right' });
+  // Seimbangkan kolom kiri dan kanan di setiap halaman
+  pages.forEach((pg) => {
+    const allOnPage = [...pg.left, ...pg.right];
+    const balancedLeft: OrderEntry[] = [];
+    const balancedRight: OrderEntry[] = [];
+    let lH = 0;
+    let rH = 0;
 
-  // Garis pemisah header
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.4);
-  doc.line(margin, 12, pageWidth - margin, 12);
+    allOnPage.forEach((ent) => {
+      if (lH <= rH) {
+        balancedLeft.push(ent);
+        lH += ent.height;
+      } else {
+        balancedRight.push(ent);
+        rH += ent.height;
+      }
+    });
 
-  const startY = 14.5;
+    pg.left = balancedLeft;
+    pg.right = balancedRight;
+  });
 
-  // 2. Helper Render Kolom Tabel
-  const renderOrdersTable = (
-    orderList: Array<{ order: UserOrder; originalIndex: number }>,
-    startX: number
-  ) => {
-    if (orderList.length === 0) return;
+  const totalPages = Math.max(1, pages.length);
 
-    const rows = orderList.map((entry) => {
-      const { order, originalIndex } = entry;
+  // Helper render satu kolom tabel
+  const renderColumnTable = (list: OrderEntry[], startX: number) => {
+    if (list.length === 0) return;
+
+    const rows = list.map((ent) => {
+      const { order, originalIndex } = ent;
       const itemsText = order.items
         .map((it) => {
           let str = `${it.quantity}x ${it.menuItemName}`;
           if (it.notes && it.notes.trim()) {
-            str += `\n   ↳ ${it.notes.trim()}`;
+            str += `\n   * Catatan: ${it.notes.trim()}`;
           }
           return str;
         })
@@ -1271,64 +1307,97 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
         originalIndex,
         order.userName,
         itemsText,
+        '[   ]',
       ];
     });
 
     autoTable(doc, {
-      startY,
-      margin: { left: startX, right: pageWidth - startX - colWidth },
+      startY: 13.5,
+      margin: { left: startX, right: pageWidth - startX - colWidth, bottom: 9 },
       tableWidth: colWidth,
       head: [[
-        { content: 'NO', styles: { cellWidth: 8, halign: 'center' } },
-        { content: 'NAMA', styles: { cellWidth: 26, halign: 'left' } },
-        { content: 'PESANAN', styles: { cellWidth: colWidth - 8 - 26, halign: 'left' } },
+        'NO',
+        'NAMA PEMESAN',
+        'PESANAN',
+        'CEK',
       ]],
       body: rows,
       theme: 'grid',
+      rowPageBreak: 'avoid',
       headStyles: {
-        fillColor: [245, 245, 245],
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
-        lineWidth: 0.25,
+        fillColor: [30, 41, 59],
+        textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 7.5,
-        cellPadding: { top: 1.2, bottom: 1.2, left: 1.5, right: 1.5 },
+        fontSize: 7.2,
+        halign: 'center',
+        cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 },
       },
       bodyStyles: {
-        fontSize: 7.5,
-        textColor: [0, 0, 0],
-        lineColor: [0, 0, 0],
+        fontSize: 7.2,
+        textColor: [30, 41, 59],
+        lineColor: [203, 213, 225],
         lineWidth: 0.2,
-        cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
+        cellPadding: { top: 1.2, bottom: 1.2, left: 1.2, right: 1.2 },
       },
       columnStyles: {
-        0: { cellWidth: 8, halign: 'center', fontStyle: 'bold', valign: 'top' },
-        1: { cellWidth: 26, halign: 'left', fontStyle: 'bold', valign: 'top' },
-        2: { cellWidth: colWidth - 8 - 26, halign: 'left', valign: 'top' },
+        0: { cellWidth: 7, halign: 'center', fontStyle: 'bold', valign: 'top' },
+        1: { cellWidth: 25, halign: 'left', fontStyle: 'bold', valign: 'top' },
+        2: { cellWidth: colWidth - 7 - 25 - 8, halign: 'left', valign: 'top' },
+        3: { cellWidth: 8, halign: 'center', fontStyle: 'normal', valign: 'middle' },
       },
     });
   };
 
-  // Render Kiri & Kanan
-  renderOrdersTable(leftOrders, margin);
-  const rightColX = margin + colWidth + colGap;
-  renderOrdersTable(rightOrders, rightColX);
+  // Render Setiap Halaman
+  pages.forEach((pg, pageIdx) => {
+    if (pageIdx > 0) {
+      doc.addPage();
+    }
 
-  // 3. Footer Pas di Batas 1/2 A4 (Y = 140.5mm)
-  const footerY = pageHeight - 8;
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.3);
-  doc.line(margin, footerY - 2, pageWidth - margin, footerY - 2);
+    // 1. Header Halaman
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    const restoName = (event.restaurantName || event.title).toUpperCase();
+    doc.text(`DISTRIBUSI PESANAN • ${restoName}`, margin, 8.5);
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(80, 80, 80);
-  doc.text('CHECKLIST PEMBAGIAN MAKANAN', margin, footerY + 2);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    const pageLabel = totalPages > 1 ? ` • Hal ${pageIdx + 1}/${totalPages}` : '';
+    doc.text(
+      `${formatIndonesianDate(event.date)} pk ${event.time} WIB${pageLabel}`,
+      pageWidth - margin,
+      8.5,
+      { align: 'right' }
+    );
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(0, 0, 0);
-  doc.text(`TOTAL: ${orders.length} ORANG • ${totalPortions} PORSI`, pageWidth - margin, footerY + 2, { align: 'right' });
+    // Garis Header
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.line(margin, 11.5, pageWidth - margin, 11.5);
+
+    // 2. Render Kolom Kiri & Kanan
+    renderColumnTable(pg.left, margin);
+    renderColumnTable(pg.right, margin + colWidth + colGap);
+
+    // 3. Footer Halaman
+    const footerY = pageHeight - 9;
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.line(margin, footerY, pageWidth - margin, footerY);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text('CHECKLIST PEMBAGIAN MAKANAN (Beri tanda [V] saat serah terima)', margin, footerY + 4);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(30, 41, 59);
+    const footerRight = `TOTAL: ${orders.length} PEMESAN • ${totalPortions} PORSI${totalPages > 1 ? ` (${pageIdx + 1}/${totalPages})` : ''}`;
+    doc.text(footerRight, pageWidth - margin, footerY + 4, { align: 'right' });
+  });
 
   // Simpan file
   const cleanResto = (event.restaurantName || event.title || 'Pesanan').replace(/[^a-zA-Z0-9]/g, '_');
@@ -2117,12 +2186,20 @@ export function exportFullPaymentFinancialPdf(
       .map((it) => `${it.quantity}x ${it.menuItemName}${it.notes ? ` (${it.notes})` : ''}`)
       .join(', ');
 
-    const statusText = o.isPaid ? 'LUNAS' : 'BELUM';
-    const methodText = o.isPaid
+    const prevPaid = o.paidAmount ?? (o.isPaid ? o.totalAmount : 0);
+    const isShortage = !o.isPaid && prevPaid > 0 && o.totalAmount > prevPaid;
+    const shortageAmount = isShortage ? o.totalAmount - prevPaid : 0;
+
+    let statusText = o.isPaid ? 'LUNAS' : 'BELUM';
+    if (isShortage) {
+      statusText = `KURANG (${formatRupiah(shortageAmount)})`;
+    }
+
+    const methodText = (o.isPaid || isShortage)
       ? (o.paymentMethod === 'cash' ? 'Cash' : 'Transfer')
       : '-';
 
-    const receivedMoneyText = o.isPaid
+    const receivedMoneyText = (o.isPaid || isShortage)
       ? formatRupiah(o.paidAmount || o.totalAmount)
       : '-';
 
@@ -2219,8 +2296,11 @@ export function exportFullPaymentFinancialPdf(
       if (data.section === 'body') {
         // Status column
         if (data.column.index === 4) {
-          if (data.cell.text[0] === 'LUNAS') {
+          if (data.cell.text[0]?.startsWith('LUNAS')) {
             data.cell.styles.textColor = [22, 101, 52];
+            data.cell.styles.fontStyle = 'bold';
+          } else if (data.cell.text[0]?.startsWith('KURANG')) {
+            data.cell.styles.textColor = [180, 83, 9];
             data.cell.styles.fontStyle = 'bold';
           } else {
             data.cell.styles.textColor = [190, 18, 60];

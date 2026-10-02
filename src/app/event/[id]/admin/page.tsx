@@ -283,8 +283,11 @@ export default function EventAdminPage() {
 
     setPaymentModalOrder(order);
     setPaymentMethod(order.paymentMethod || 'cash');
-    // Default cash amount to exact amount
-    setCashGivenAmount(order.paidAmount ? order.paidAmount.toString() : order.totalAmount.toString());
+    const prevPaid = order.paidAmount ?? (order.isPaid ? order.totalAmount : 0);
+    const shortage = (!order.isPaid && prevPaid > 0 && order.totalAmount > prevPaid)
+      ? order.totalAmount - prevPaid
+      : order.totalAmount;
+    setCashGivenAmount(shortage.toString());
     setIsModalChangeReturned(Boolean(order.isChangeReturned));
   };
 
@@ -333,23 +336,26 @@ export default function EventAdminPage() {
   const handleConfirmPayment = async () => {
     if (!paymentModalOrder) return;
 
-    const totalToPay = paymentModalOrder.totalAmount;
-    let paidVal = totalToPay;
+    const prevPaid = paymentModalOrder.paidAmount ?? (paymentModalOrder.isPaid ? paymentModalOrder.totalAmount : 0);
+    const isShortage = !paymentModalOrder.isPaid && prevPaid > 0 && paymentModalOrder.totalAmount > prevPaid;
+    const shortageNeeded = isShortage ? paymentModalOrder.totalAmount - prevPaid : paymentModalOrder.totalAmount;
+
+    let paidVal = paymentModalOrder.totalAmount;
     let changeVal = 0;
 
     if (paymentMethod === 'cash') {
       const parsedCash = parseInt(cashGivenAmount.replace(/\D/g, ''), 10);
-      if (isNaN(parsedCash) || parsedCash < totalToPay) {
+      if (isNaN(parsedCash) || parsedCash < shortageNeeded) {
         alert(
-          `Uang tunai yang diserahkan (${formatRupiah(parsedCash || 0)}) kurang dari tagihan (${formatRupiah(totalToPay)})!`
+          `Uang tunai yang diserahkan (${formatRupiah(parsedCash || 0)}) kurang dari tagihan (${formatRupiah(shortageNeeded)})!`
         );
         return;
       }
-      paidVal = parsedCash;
-      changeVal = parsedCash - totalToPay;
+      paidVal = prevPaid + parsedCash;
+      changeVal = parsedCash - shortageNeeded;
     } else {
       // Transfer: amount paid is exact total
-      paidVal = totalToPay;
+      paidVal = paymentModalOrder.totalAmount;
       changeVal = 0;
     }
 
@@ -744,7 +750,11 @@ export default function EventAdminPage() {
   }, [orders]);
 
   const totalPaidAmount = useMemo(() => {
-    return orders.filter((o) => o.isPaid).reduce((sum, o) => sum + o.totalAmount, 0);
+    return orders.reduce((sum, o) => {
+      if (o.isPaid) return sum + o.totalAmount;
+      if ((o.paidAmount || 0) > 0) return sum + (o.paidAmount || 0);
+      return sum;
+    }, 0);
   }, [orders]);
 
   // Daftar pesanan tunai yang memiliki uang kembalian
@@ -817,9 +827,16 @@ export default function EventAdminPage() {
       roundingText = `\nPembulatan: ${order.roundingAmount > 0 ? '+' : ''}${formatRupiah(order.roundingAmount)}`;
     }
 
-    const paymentStatusText = order.isPaid
-      ? `✅ *Status: LUNAS* (${order.paymentMethod === 'cash' ? 'Cash / Tunai' : 'Transfer'})`
-      : `⏳ *Status: BELUM LUNAS*`;
+    const prevPaid = order.paidAmount ?? (order.isPaid ? order.totalAmount : 0);
+    const isShortage = !order.isPaid && prevPaid > 0 && order.totalAmount > prevPaid;
+    const shortageAmount = isShortage ? order.totalAmount - prevPaid : 0;
+
+    let paymentStatusText = `⏳ *Status: BELUM LUNAS*`;
+    if (order.isPaid) {
+      paymentStatusText = `✅ *Status: LUNAS* (${order.paymentMethod === 'cash' ? 'Cash / Tunai' : 'Transfer'})`;
+    } else if (isShortage) {
+      paymentStatusText = `⚠️ *Status: KURANG BAYAR*\n• Sudah Dibayar Sebelumnya: ${formatRupiah(prevPaid)} (${order.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})\n• Sisa Kurang Bayar: *${formatRupiah(shortageAmount)}*`;
+    }
 
     const msg = `Halo kak *${order.userName}*! 👋\nBerikut rincian pesanan makan kantor untuk acara *"${event.title}"* (${event.restaurantName}):\n\n${itemsText}\n\n*Subtotal:* ${formatRupiah(order.subtotal)}${taxText}${roundingText}\n*Total Tagihan:* *${formatRupiah(order.totalAmount)}*\n${paymentStatusText}\n\nPembayaran dapat diserahkan ke PIC (*${event.picName}*).\nTerima kasih! 🙏`;
 
@@ -1964,25 +1981,36 @@ export default function EventAdminPage() {
                       </div>
 
                       {/* Status Badge */}
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 flex items-center gap-1 border ${
-                          order.isPaid
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                            : 'bg-amber-100 text-amber-800 border-amber-200'
-                        }`}
-                      >
-                        {order.isPaid ? (
-                          <>
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Lunas ({order.paymentMethod === 'cash' ? 'Cash' : 'TF'})</span>
-                          </>
-                        ) : (
-                          <>
+                      {(() => {
+                        const prevPaid = order.paidAmount ?? (order.isPaid ? order.totalAmount : 0);
+                        const isShortage = !order.isPaid && prevPaid > 0 && order.totalAmount > prevPaid;
+                        const shortageAmount = isShortage ? order.totalAmount - prevPaid : 0;
+
+                        if (order.isPaid) {
+                          return (
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 flex items-center gap-1 border bg-emerald-100 text-emerald-800 border-emerald-200">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Lunas ({order.paymentMethod === 'cash' ? 'Cash' : 'TF'})</span>
+                            </span>
+                          );
+                        }
+
+                        if (isShortage) {
+                          return (
+                            <span className="px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 flex items-center gap-1 border bg-amber-100 text-amber-900 border-amber-300">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Kurang {formatRupiah(shortageAmount)}</span>
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold shrink-0 flex items-center gap-1 border bg-amber-100 text-amber-800 border-amber-200">
                             <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                             <span>Belum Bayar</span>
-                          </>
-                        )}
-                      </span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     {/* Ordered Items List */}
@@ -2015,6 +2043,18 @@ export default function EventAdminPage() {
                             {order.roundingAmount !== 0 && `Bulat: ${order.roundingAmount > 0 ? '+' : ''}${formatRupiah(order.roundingAmount)}`}
                           </div>
                         )}
+                        {(() => {
+                          const prevPaid = order.paidAmount ?? (order.isPaid ? order.totalAmount : 0);
+                          const isShortage = !order.isPaid && prevPaid > 0 && order.totalAmount > prevPaid;
+                          if (isShortage) {
+                            return (
+                              <div className="text-amber-800 font-medium">
+                                Sudah Bayar: {formatRupiah(prevPaid)} ({order.paymentMethod === 'cash' ? 'Cash' : 'TF'})
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                         {order.isPaid && order.paymentMethod === 'cash' && (
                           <div className="text-emerald-700 font-medium">
                             {order.changeAmount && order.changeAmount > 0 ? (
@@ -2051,27 +2091,41 @@ export default function EventAdminPage() {
 
                     {/* Quick Action Footer */}
                     <div className="grid grid-cols-12 gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPaymentModal(order)}
-                        className={`col-span-5 py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border shadow-2xs ${
-                          order.isPaid
-                            ? 'bg-white hover:bg-slate-50 border-emerald-300 text-emerald-800'
-                            : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
-                        }`}
-                      >
-                        {order.isPaid ? (
-                          <>
-                            <Edit3 className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">Ubah Status</span>
-                          </>
-                        ) : (
-                          <>
-                            <Banknote className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">Bayar</span>
-                          </>
-                        )}
-                      </button>
+                      {(() => {
+                        const prevPaid = order.paidAmount ?? (order.isPaid ? order.totalAmount : 0);
+                        const isShortage = !order.isPaid && prevPaid > 0 && order.totalAmount > prevPaid;
+
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPaymentModal(order)}
+                            className={`col-span-5 py-2 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border shadow-2xs ${
+                              order.isPaid
+                                ? 'bg-white hover:bg-slate-50 border-emerald-300 text-emerald-800'
+                                : isShortage
+                                ? 'bg-amber-600 hover:bg-amber-700 border-amber-600 text-white'
+                                : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
+                            }`}
+                          >
+                            {order.isPaid ? (
+                              <>
+                                <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">Ubah Status</span>
+                              </>
+                            ) : isShortage ? (
+                              <>
+                                <Banknote className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">Pelunasan Kurang</span>
+                              </>
+                            ) : (
+                              <>
+                                <Banknote className="w-3.5 h-3.5 shrink-0" />
+                                <span className="truncate">Catat Bayar</span>
+                              </>
+                            )}
+                          </button>
+                        );
+                      })()}
 
                       <button
                         type="button"
@@ -2177,57 +2231,84 @@ export default function EventAdminPage() {
                           {formatRupiah(order.totalAmount)}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenPaymentModal(order)}
-                            className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl font-bold text-xs transition border ${
-                              order.isPaid
-                                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-2xs'
-                                : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200 hover:border-slate-300'
-                            }`}
-                            title={order.isPaid ? 'Klik untuk membatalkan atau melihat status' : 'Klik untuk mencatat pembayaran'}
-                          >
-                            <div className="flex items-center gap-1.5">
-                              {order.isPaid ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <span>Lunas {order.paymentMethod === 'cash' ? '(Cash)' : '(Transfer)'}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400" />
-                                  <span>Belum Bayar</span>
-                                </>
-                              )}
-                            </div>
+                          {(() => {
+                            const prevPaid = order.paidAmount ?? (order.isPaid ? order.totalAmount : 0);
+                            const isShortage = !order.isPaid && prevPaid > 0 && order.totalAmount > prevPaid;
+                            const shortageAmount = isShortage ? order.totalAmount - prevPaid : 0;
 
-                            {order.isPaid && order.paymentMethod === 'cash' && (
-                              <div className="text-[10px] text-emerald-700 font-medium">
-                                {order.changeAmount && order.changeAmount > 0 ? (
-                                  <div className="flex items-center justify-center gap-1 mt-0.5">
-                                    <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleChangeReturned(order);
-                                      }}
-                                      title={order.isChangeReturned ? 'Klik untuk membatalkan tanda serah terima' : 'Klik untuk menandai kembalian sudah diserahkan'}
-                                      className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold border transition ${
-                                        order.isChangeReturned
-                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                          : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
-                                      }`}
-                                    >
-                                      {order.isChangeReturned ? '✓ Sudah' : 'Belum'}
-                                    </button>
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPaymentModal(order)}
+                                className={`inline-flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl font-bold text-xs transition border ${
+                                  order.isPaid
+                                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100 shadow-2xs'
+                                    : isShortage
+                                    ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 shadow-2xs'
+                                    : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200 hover:border-slate-300'
+                                }`}
+                                title={
+                                  order.isPaid
+                                    ? 'Klik untuk membatalkan atau melihat status'
+                                    : isShortage
+                                    ? `Klik untuk pelunasan kekurangan (${formatRupiah(shortageAmount)})`
+                                    : 'Klik untuk mencatat pembayaran'
+                                }
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  {order.isPaid ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                      <span>Lunas {order.paymentMethod === 'cash' ? '(Cash)' : '(Transfer)'}</span>
+                                    </>
+                                  ) : isShortage ? (
+                                    <>
+                                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span>Kurang {formatRupiah(shortageAmount)}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-400" />
+                                      <span>Belum Bayar</span>
+                                    </>
+                                  )}
+                                </div>
+
+                                {isShortage && (
+                                  <div className="text-[10px] text-amber-700 font-medium">
+                                    Sudah bayar: {formatRupiah(prevPaid)} ({order.paymentMethod === 'cash' ? 'Cash' : 'TF'})
                                   </div>
-                                ) : (
-                                  <span>Uang Pas</span>
                                 )}
-                              </div>
-                            )}
-                          </button>
+
+                                {order.isPaid && order.paymentMethod === 'cash' && (
+                                  <div className="text-[10px] text-emerald-700 font-medium">
+                                    {order.changeAmount && order.changeAmount > 0 ? (
+                                      <div className="flex items-center justify-center gap-1 mt-0.5">
+                                        <span>Kembali: <strong>{formatRupiah(order.changeAmount)}</strong></span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleToggleChangeReturned(order);
+                                          }}
+                                          title={order.isChangeReturned ? 'Klik untuk membatalkan tanda serah terima' : 'Klik untuk menandai kembalian sudah diserahkan'}
+                                          className={`px-1.5 py-0.2 rounded text-[9px] font-extrabold border transition ${
+                                            order.isChangeReturned
+                                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                              : 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                                          }`}
+                                        >
+                                          {order.isChangeReturned ? '✓ Sudah' : 'Belum'}
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <span>Uang Pas</span>
+                                    )}
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })()}
                         </td>
                         <td className="py-3 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -2584,7 +2665,12 @@ export default function EventAdminPage() {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-base text-slate-900">
-                  Catat Pembayaran
+                  {(() => {
+                    const prevPaid = paymentModalOrder.paidAmount ?? (paymentModalOrder.isPaid ? paymentModalOrder.totalAmount : 0);
+                    return (!paymentModalOrder.isPaid && prevPaid > 0 && paymentModalOrder.totalAmount > prevPaid)
+                      ? 'Pelunasan Kekurangan'
+                      : 'Catat Pembayaran';
+                  })()}
                 </h3>
                 <p className="text-xs text-slate-500">
                   Pemesan: <strong className="text-slate-800">{paymentModalOrder.userName}</strong>
@@ -2600,17 +2686,42 @@ export default function EventAdminPage() {
             </div>
 
             {/* Total Tagihan Box */}
-            <div className="p-3.5 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
-              <div>
-                <span className="text-xs text-orange-800 font-medium block">Total Tagihan:</span>
-                <span className="text-xl font-black text-orange-600">
-                  {formatRupiah(paymentModalOrder.totalAmount)}
-                </span>
-              </div>
-              <span className="text-[11px] text-orange-700 bg-orange-100 px-2.5 py-1 rounded-lg font-bold">
-                {paymentModalOrder.items.reduce((sum, it) => sum + it.quantity, 0)} Porsi
-              </span>
-            </div>
+            {(() => {
+              const prevPaid = paymentModalOrder.paidAmount ?? (paymentModalOrder.isPaid ? paymentModalOrder.totalAmount : 0);
+              const isShortage = !paymentModalOrder.isPaid && prevPaid > 0 && paymentModalOrder.totalAmount > prevPaid;
+              const shortageVal = isShortage ? paymentModalOrder.totalAmount - prevPaid : paymentModalOrder.totalAmount;
+
+              if (isShortage) {
+                return (
+                  <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-amber-900 font-bold block">Sisa Kekurangan:</span>
+                      <span className="text-xl font-black text-amber-700">
+                        {formatRupiah(shortageVal)}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-amber-800 pt-1.5 border-t border-amber-200/90 flex items-center justify-between">
+                      <span>Total Baru: {formatRupiah(paymentModalOrder.totalAmount)}</span>
+                      <span>Sudah Bayar: {formatRupiah(prevPaid)} ({paymentModalOrder.paymentMethod === 'cash' ? 'Cash' : 'TF'})</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="p-3.5 bg-orange-50 border border-orange-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-orange-800 font-medium block">Total Tagihan:</span>
+                    <span className="text-xl font-black text-orange-600">
+                      {formatRupiah(paymentModalOrder.totalAmount)}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-orange-700 bg-orange-100 px-2.5 py-1 rounded-lg font-bold">
+                    {paymentModalOrder.items.reduce((sum, it) => sum + it.quantity, 0)} Porsi
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Metode Pembayaran: Cash / Transfer */}
             <div className="space-y-1.5">
@@ -2622,7 +2733,11 @@ export default function EventAdminPage() {
                   type="button"
                   onClick={() => {
                     setPaymentMethod('cash');
-                    setCashGivenAmount(paymentModalOrder.totalAmount.toString());
+                    const prevPaid = paymentModalOrder.paidAmount ?? (paymentModalOrder.isPaid ? paymentModalOrder.totalAmount : 0);
+                    const shortageNeeded = (!paymentModalOrder.isPaid && prevPaid > 0 && paymentModalOrder.totalAmount > prevPaid)
+                      ? paymentModalOrder.totalAmount - prevPaid
+                      : paymentModalOrder.totalAmount;
+                    setCashGivenAmount(shortageNeeded.toString());
                   }}
                   className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-2 ${
                     paymentMethod === 'cash'
@@ -2670,34 +2785,49 @@ export default function EventAdminPage() {
 
                 {/* Quick Cash Buttons */}
                 <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCashGivenAmount(paymentModalOrder.totalAmount.toString())}
-                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
-                  >
-                    Uang Pas ({formatRupiah(paymentModalOrder.totalAmount)})
-                  </button>
-                  {[20000, 50000, 100000].map((nominal) => {
-                    if (nominal >= paymentModalOrder.totalAmount) {
-                      return (
+                  {(() => {
+                    const prevPaid = paymentModalOrder.paidAmount ?? (paymentModalOrder.isPaid ? paymentModalOrder.totalAmount : 0);
+                    const shortageNeeded = (!paymentModalOrder.isPaid && prevPaid > 0 && paymentModalOrder.totalAmount > prevPaid)
+                      ? paymentModalOrder.totalAmount - prevPaid
+                      : paymentModalOrder.totalAmount;
+
+                    return (
+                      <>
                         <button
-                          key={nominal}
                           type="button"
-                          onClick={() => setCashGivenAmount(nominal.toString())}
+                          onClick={() => setCashGivenAmount(shortageNeeded.toString())}
                           className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
                         >
-                          {formatRupiah(nominal)}
+                          Uang Pas ({formatRupiah(shortageNeeded)})
                         </button>
-                      );
-                    }
-                    return null;
-                  })}
+                        {[20000, 50000, 100000].map((nominal) => {
+                          if (nominal >= shortageNeeded) {
+                            return (
+                              <button
+                                key={nominal}
+                                type="button"
+                                onClick={() => setCashGivenAmount(nominal.toString())}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold"
+                              >
+                                {formatRupiah(nominal)}
+                              </button>
+                            );
+                          }
+                          return null;
+                        })}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Kembalian Display Box */}
                 {(() => {
+                  const prevPaid = paymentModalOrder.paidAmount ?? (paymentModalOrder.isPaid ? paymentModalOrder.totalAmount : 0);
+                  const shortageNeeded = (!paymentModalOrder.isPaid && prevPaid > 0 && paymentModalOrder.totalAmount > prevPaid)
+                    ? paymentModalOrder.totalAmount - prevPaid
+                    : paymentModalOrder.totalAmount;
                   const parsed = parseInt(cashGivenAmount.replace(/\D/g, ''), 10) || 0;
-                  const diff = parsed - paymentModalOrder.totalAmount;
+                  const diff = parsed - shortageNeeded;
                   if (diff > 0) {
                     return (
                       <div className="space-y-2">

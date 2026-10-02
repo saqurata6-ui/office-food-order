@@ -248,7 +248,7 @@ export default function OrderPage() {
           menuItemName: menu ? menu.name : 'Menu',
           price: menu ? menu.price : 0,
           quantity: data.quantity,
-          notes: allowItemNotes ? (data.notes || '') : '',
+          notes: allowItemNotes ? (data.notes ? data.notes.trim() : '') : '',
         };
       });
   }, [selectedItems, event, allowItemNotes]);
@@ -332,7 +332,10 @@ export default function OrderPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userName: userName.trim(),
-          items: orderItemsList,
+          items: orderItemsList.map((it) => ({
+            ...it,
+            notes: it.notes?.trim() || '',
+          })),
           orderId: existingOrder?.id,
           includeTax: showTaxEstimate,
         }),
@@ -644,14 +647,22 @@ export default function OrderPage() {
             {/* Expanded List with instant search & scroll container */}
             {isOrderListExpanded && (
               <div className="mt-2.5 p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-2 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
                     <Eye className="w-3.5 h-3.5 text-blue-600" />
                     <span>{event.isLocked ? 'Daftar Pesanan Rekan Kantor:' : 'Pilih Nama Pemesan:'}</span>
                   </span>
-                  <span className="text-[10px] text-slate-400 font-medium">
-                    {filteredOrders.length} dari {orders.length} nama
-                  </span>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[8px] font-black flex items-center justify-center">C</span>
+                      <span>Cash</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[8px] font-black flex items-center justify-center">T</span>
+                      <span>Transfer</span>
+                    </span>
+                    <span className="text-slate-400 font-medium">({filteredOrders.length}/{orders.length})</span>
+                  </div>
                 </div>
 
                 {/* Instant search input when there are 5 or more orders */}
@@ -695,30 +706,71 @@ export default function OrderPage() {
                       };
                       const ordCalc = calculateOrder(ord.items, chipTaxConfig);
 
+                      // Logika status bayar & kurang bayar
+                      const prevPaid = ord.paidAmount ?? (ord.isPaid ? ord.totalAmount : 0);
+                      const isShortage = !ord.isPaid && prevPaid > 0 && ordCalc.totalAmount > prevPaid;
+                      const shortageAmount = isShortage ? ordCalc.totalAmount - prevPaid : 0;
+                      const isPaidFull = ord.isPaid;
+                      const paymentLetter = ord.paymentMethod === 'cash' ? 'C' : 'T';
+
                       return (
                         <button
                           key={ord.id}
                           type="button"
-                          title={`${ord.userName} • ${formatRupiah(ordCalc.totalAmount)} (Klik untuk lihat/ubah)`}
+                          title={
+                            isShortage
+                              ? `${ord.userName} • Kurang ${formatRupiah(shortageAmount)} (Total: ${formatRupiah(ordCalc.totalAmount)})`
+                              : isPaidFull
+                              ? `${ord.userName} • Lunas (${ord.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})`
+                              : `${ord.userName} • ${formatRupiah(ordCalc.totalAmount)} (Klik untuk lihat/ubah)`
+                          }
                           onClick={() => setPreviewOrder(ord)}
                           className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center justify-between gap-1.5 border text-left cursor-pointer min-w-0 ${
                             isCurrentActive
                               ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : isShortage
+                              ? 'bg-amber-50/80 hover:bg-amber-100 text-amber-950 border-amber-300'
                               : 'bg-white hover:bg-blue-50 text-slate-800 hover:text-blue-700 border-slate-200 hover:border-blue-300'
                           }`}
                         >
-                          <span className="truncate font-semibold min-w-0 flex-1">
-                            {ord.userName}
+                          <span className="truncate font-semibold min-w-0 flex-1 flex items-center gap-1.5">
+                            {isPaidFull && (
+                              <span
+                                className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs"
+                                title={`Lunas (${ord.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})`}
+                              >
+                                {paymentLetter}
+                              </span>
+                            )}
+                            {isShortage && (
+                              <span
+                                className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shrink-0 shadow-2xs"
+                                title={`Kurang ${formatRupiah(shortageAmount)} (Sebelumnya bayar ${formatRupiah(prevPaid)} via ${ord.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})`}
+                              >
+                                {paymentLetter}
+                              </span>
+                            )}
+                            <span className="truncate">{ord.userName}</span>
                           </span>
-                          <span
-                            className={`shrink-0 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md ${
-                              isCurrentActive
-                                ? 'bg-blue-700 text-blue-100'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {formatRupiah(ordCalc.totalAmount)}
-                          </span>
+
+                          <div className="shrink-0 flex items-center gap-1">
+                            {isShortage && (
+                              <span className="text-[9px] font-extrabold text-amber-800 bg-amber-200/90 px-1 py-0.5 rounded">
+                                Kurang {formatRupiah(shortageAmount)}
+                              </span>
+                            )}
+                            <span
+                              className={`text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md ${
+                                isCurrentActive
+                                  ? 'bg-blue-700 text-blue-100'
+                                  : isShortage
+                                  ? 'bg-amber-100 text-amber-900'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {formatRupiah(ordCalc.totalAmount)}
+                            </span>
+                          </div>
                         </button>
                       );
                     })}
@@ -731,26 +783,52 @@ export default function OrderPage() {
 
         {/* Status banner when editing vs new order */}
         {existingOrder ? (
-          <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 font-bold text-blue-900">
-                <Edit3 className="w-4 h-4 text-blue-600" />
-                <span>Mode Edit Pesanan: {existingOrder.userName}</span>
+          <div className="space-y-2">
+            <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                  <Edit3 className="w-4 h-4 text-blue-600" />
+                  <span>Mode Edit Pesanan: {existingOrder.userName}</span>
+                </div>
+                <span className="text-[11px] font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-md">
+                  Tersimpan: {formatRupiah(
+                    calculateOrder(existingOrder.items, {
+                      ...event.taxConfig,
+                      useTax: event.taxConfig.useTax && showTaxEstimate,
+                    }).totalAmount
+                  )}
+                </span>
               </div>
-              <span className="text-[11px] font-extrabold bg-blue-200 text-blue-900 px-2 py-0.5 rounded-md">
-                Tersimpan: {formatRupiah(
-                  calculateOrder(existingOrder.items, {
-                    ...event.taxConfig,
-                    useTax: event.taxConfig.useTax && showTaxEstimate,
-                  }).totalAmount
-                )}
-              </span>
+              <p className="text-[11px] text-blue-700 leading-relaxed">
+                {event.isLocked
+                  ? 'Pesanan sudah dikunci oleh PIC. Anda hanya dapat melihat rincian pesanan Anda.'
+                  : 'Porsi dan catatan sebelumnya sudah otomatis terisi di bawah. Silakan tambah/kurang menu, lalu tekan tombol "Simpan Perubahan Pesanan" di bawah.'}
+              </p>
             </div>
-            <p className="text-[11px] text-blue-700 leading-relaxed">
-              {event.isLocked
-                ? 'Pesanan sudah dikunci oleh PIC. Anda hanya dapat melihat rincian pesanan Anda.'
-                : 'Porsi dan catatan sebelumnya sudah otomatis terisi di bawah. Silakan tambah/kurang menu, lalu tekan tombol "Simpan Perubahan Pesanan" di bawah.'}
-            </p>
+
+            {/* Banner Khusus jika sebelumnya sudah bayar dan sekarang bertambah melebihi pesanan awal */}
+            {(() => {
+              const prevPaid = existingOrder.paidAmount ?? (existingOrder.isPaid ? existingOrder.totalAmount : 0);
+              const isShort = prevPaid > 0 && calculation.totalAmount > prevPaid;
+              const shortVal = isShort ? calculation.totalAmount - prevPaid : 0;
+              if (!isShort) return null;
+              return (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs space-y-1 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-1.5 text-amber-900">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Pesanan Bertambah (Kurang Bayar)</span>
+                    </span>
+                    <span className="text-[11px] font-black bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md">
+                      Kurang: {formatRupiah(shortVal)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    Pesanan awal Anda sudah dibayar sebesar <strong>{formatRupiah(prevPaid)}</strong> ({existingOrder.paymentMethod === 'cash' ? 'Cash' : 'Transfer'}). Karena Anda menambah menu, terdapat kekurangan bayar sebesar <strong className="text-amber-950 font-extrabold">{formatRupiah(shortVal)}</strong> (Total pesanan baru: {formatRupiah(calculation.totalAmount)}).
+                  </p>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           userName.trim() && (
@@ -1008,9 +1086,23 @@ export default function OrderPage() {
                 <span className="block text-[11px] text-slate-500 font-medium">
                   {totalItemCount} Menu Dipilih
                 </span>
-                <span className="block text-base font-extrabold text-slate-900 leading-tight">
-                  {formatRupiah(calculation.totalAmount)}
-                </span>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="block text-base font-extrabold text-slate-900 leading-tight">
+                    {formatRupiah(calculation.totalAmount)}
+                  </span>
+                  {(() => {
+                    if (!existingOrder) return null;
+                    const prevPaid = existingOrder.paidAmount ?? (existingOrder.isPaid ? existingOrder.totalAmount : 0);
+                    if (prevPaid > 0 && calculation.totalAmount > prevPaid) {
+                      return (
+                        <span className="text-[11px] font-extrabold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded">
+                          Kurang {formatRupiah(calculation.totalAmount - prevPaid)}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
               </div>
               {showBreakdown ? (
                 <ChevronDown className="w-4 h-4 text-slate-400" />
@@ -1037,10 +1129,16 @@ export default function OrderPage() {
                     <span>Menyimpan...</span>
                   </>
                 ) : existingOrder ? (
-                  <>
-                    <Edit3 className="w-4 h-4" />
-                    <span>Simpan Perubahan Pesanan</span>
-                  </>
+                  (() => {
+                    const prevPaid = existingOrder.paidAmount ?? (existingOrder.isPaid ? existingOrder.totalAmount : 0);
+                    const isShort = prevPaid > 0 && calculation.totalAmount > prevPaid;
+                    return (
+                      <>
+                        <Edit3 className="w-4 h-4" />
+                        <span>{isShort ? 'Simpan Penambahan Pesanan' : 'Simpan Perubahan Pesanan'}</span>
+                      </>
+                    );
+                  })()
                 ) : (
                   <>
                     <ShoppingBag className="w-4 h-4" />
@@ -1205,9 +1303,24 @@ export default function OrderPage() {
               <div className="flex items-center justify-between text-xs px-1">
                 <span className="text-slate-500 font-medium">Status Bayar:</span>
                 {previewOrder.isPaid ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                    <Check className="w-3 h-3" /> Lunas ({previewOrder.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})
+                  <span className="inline-flex items-center gap-1.5 font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                    <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                      {previewOrder.paymentMethod === 'cash' ? 'C' : 'T'}
+                    </span>
+                    <span>Lunas ({previewOrder.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})</span>
                   </span>
+                ) : (previewOrder.paidAmount || 0) > 0 && (previewCalculation?.totalAmount ?? previewOrder.totalAmount) > (previewOrder.paidAmount || 0) ? (
+                  <div className="text-right space-y-0.5">
+                    <span className="inline-flex items-center gap-1.5 font-bold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300">
+                      <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                        {previewOrder.paymentMethod === 'cash' ? 'C' : 'T'}
+                      </span>
+                      <span>Kurang Bayar: {formatRupiah((previewCalculation?.totalAmount ?? previewOrder.totalAmount) - (previewOrder.paidAmount || 0))}</span>
+                    </span>
+                    <span className="block text-[10px] text-slate-500">
+                      Sudah bayar {formatRupiah(previewOrder.paidAmount || 0)} ({previewOrder.paymentMethod === 'cash' ? 'Cash' : 'Transfer'})
+                    </span>
+                  </div>
                 ) : (
                   <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
                     Belum Bayar

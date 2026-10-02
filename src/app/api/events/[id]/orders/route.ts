@@ -98,8 +98,39 @@ export async function POST(
 
     const calc = calculateOrder(validItems, effectiveTaxConfig);
 
+    const currentExistingOrder = existingOrders.find(
+      (o) => (orderId && o.id === orderId) || normalizeName(o.userName) === cleanNormalizedName
+    );
+
+    const prevPaidAmount = currentExistingOrder?.paidAmount ?? (currentExistingOrder?.isPaid ? currentExistingOrder.totalAmount : 0);
+    const prevPaymentMethod = currentExistingOrder?.paymentMethod;
+
+    let isPaid = false;
+    let paidAmount: number | undefined = undefined;
+    let paymentMethod: 'cash' | 'transfer' | undefined = undefined;
+    let changeAmount: number | undefined = undefined;
+    let isChangeReturned: boolean | undefined = undefined;
+
+    if (prevPaidAmount > 0) {
+      paymentMethod = prevPaymentMethod || 'cash';
+      paidAmount = prevPaidAmount;
+
+      if (calc.totalAmount <= prevPaidAmount) {
+        isPaid = true;
+        if (paymentMethod === 'cash') {
+          changeAmount = prevPaidAmount - calc.totalAmount;
+          isChangeReturned = changeAmount === 0 ? true : currentExistingOrder?.isChangeReturned;
+        }
+      } else {
+        // Total pesanan baru bertambah melebihi pesanan awal -> Kurang Bayar
+        isPaid = false;
+        changeAmount = 0;
+        isChangeReturned = false;
+      }
+    }
+
     const userOrder: UserOrder = {
-      id: orderId || `ord_${nanoid(8)}`,
+      id: currentExistingOrder ? currentExistingOrder.id : (orderId || `ord_${nanoid(8)}`),
       eventId: event.id,
       userName: userName.trim(),
       items: validItems,
@@ -108,8 +139,12 @@ export async function POST(
       serviceAmount: calc.serviceAmount,
       roundingAmount: calc.roundingAmount,
       totalAmount: calc.totalAmount,
-      isPaid: false,
-      createdAt: new Date().toISOString(),
+      isPaid,
+      paymentMethod,
+      paidAmount,
+      changeAmount,
+      isChangeReturned,
+      createdAt: currentExistingOrder?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
