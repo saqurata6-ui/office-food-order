@@ -1270,10 +1270,10 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
     });
   });
 
-  // Estimasi tinggi setiap baris pesanan secara akurat
+  // Estimasi tinggi setiap baris pesanan secara akurat dengan spasi yang lega
   const getOrderEstimatedHeight = (order: UserOrder): number => {
     let lines = 0;
-    order.items.forEach((it) => {
+    order.items.forEach((it, idx) => {
       const nameLen = `${it.quantity}x ${it.menuItemName}`.length;
       const nameLines = Math.max(1, Math.ceil(nameLen / 34));
       lines += nameLines;
@@ -1282,8 +1282,11 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
         const noteLines = Math.max(1, Math.ceil(noteLen / 38));
         lines += noteLines;
       }
+      if (idx < order.items.length - 1) {
+        lines += 0.4;
+      }
     });
-    return Math.max(lines, 1) * 3.0 + 4.2;
+    return Math.max(lines, 1) * 3.1 + 4.5;
   };
 
   interface OrderEntry {
@@ -1299,7 +1302,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
   }));
 
   // Batas aman tinggi kolom (mm) agar autoTable tidak pernah memecah baris antar halaman
-  const MAX_COL_HEIGHT = 100;
+  const MAX_COL_HEIGHT = 110;
 
   // Algoritma pembagian sekuensial 2 kolom per halaman (tanpa melompat ganjil-genap)
   const findBestSplit = (slice: OrderEntry[]) => {
@@ -1375,7 +1378,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
           }
           return str;
         })
-        .join('\n');
+        .join('\n\n');
 
       return [
         originalIndex,
@@ -1411,7 +1414,7 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
         textColor: [30, 41, 59],
         lineColor: [203, 213, 225],
         lineWidth: 0.2,
-        cellPadding: { top: 2.0, bottom: 2.0, left: 1.8, right: 1.8 },
+        cellPadding: { top: 2.2, bottom: 2.2, left: 2.0, right: 2.0 },
       },
       columnStyles: {
         0: { cellWidth: 7, halign: 'center', fontStyle: 'bold', valign: 'top' },
@@ -1430,28 +1433,34 @@ export function exportToPersonOrderHalfA4Pdf(event: EventData, orders: UserOrder
           if (!ent) return;
           const cell = data.cell;
           const startXPos = cell.x + cell.padding('left');
-          let textY = cell.y + cell.padding('top') + 2.0;
+          let textY = cell.y + cell.padding('top') + 2.2;
           const maxW = cell.width - cell.padding('left') - cell.padding('right');
 
-          ent.order.items.forEach((it) => {
-            // Nama Menu & Qty: Bold, Hitam/Dark Slate
+          ent.order.items.forEach((it, idx) => {
+            // Nama Menu & Qty: Bold, Hitam/Dark Slate, dengan tinggi baris lega
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7.0);
             doc.setTextColor(30, 41, 59);
             const mainText = `${it.quantity}x ${it.menuItemName}`;
             const mainLines = doc.splitTextToSize(mainText, maxW);
             doc.text(mainLines, startXPos, textY);
-            textY += mainLines.length * 2.7;
+            textY += mainLines.length * 3.1;
 
             // Catatan: Miring (Italic), Lebih Kecil, Muted Slate
             if (it.notes && it.notes.trim()) {
+              textY += 0.4;
               doc.setFont('helvetica', 'italic');
-              doc.setFontSize(6.0);
+              doc.setFontSize(6.2);
               doc.setTextColor(100, 116, 139);
               const noteText = `* Catatan: ${it.notes.trim()}`;
               const noteLines = doc.splitTextToSize(noteText, maxW - 2);
               doc.text(noteLines, startXPos + 1.5, textY);
-              textY += noteLines.length * 2.4;
+              textY += noteLines.length * 2.8;
+            }
+
+            // Jarak pemisah antar menu yang berbeda untuk pemesan yang sama
+            if (idx < ent.order.items.length - 1) {
+              textY += 1.6;
             }
           });
         }
